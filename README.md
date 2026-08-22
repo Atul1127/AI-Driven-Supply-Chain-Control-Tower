@@ -1,66 +1,66 @@
 # Intelligent Demand & Supply Chain Control Tower
 
-### Retail Demand Forecasting • Inventory Optimization • Supplier Risk
+### SKU-level Demand Forecasting • Inventory Optimization • Supplier Risk • Control Tower
 
-An end-to-end retail supply-chain analytics system that connects **demand forecasting, inventory decisions, and supplier risk** into one operational control-tower workflow.
+An end-to-end retail supply-chain decision system that connects **store/SKU demand forecasting, inventory optimization, supplier risk, explainability, and operational priorities**.
 
-> **Business question:** What demand should we expect, which inventory is at risk, and what should we reorder?
+> **Business question:** What will each store/SKU need, which inventory positions require action, and what should be reordered?
 
 ## Architecture
 
 ```text
 Synthetic Retail Data
         │
-        ▼
-   PostgreSQL + SQL
-        │
-        ├───────────────┐
-        ▼               ▼
- Time-Series        Business EDA
- Analysis               │
-        │               │
-   ┌────┴────┐          │
-   ▼    ▼    ▼          │
- ARIMA SARIMA SARIMAX   │
-   │    │    │          │
-   └────┼────┘          │
-        ▼               │
-      XGBoost           │
-        │               │
-        ▼               │
-   30-Day Forecast      │
-        │               │
-        ▼               │
- Inventory Optimization
-   │    │    │
-   ▼    ▼    ▼
- Safety  ROP  EOQ
- Stock
+        ├──────────────► PostgreSQL + SQL Analytics
         │
         ▼
- Recommended Orders
+ Store × SKU Daily Demand
         │
-        ├──────────────► Supplier Risk
-        │
-        ▼
-  CONTROL TOWER
+        ├── Naive baselines
+        └── XGBoost forecasting
+                │
+                ▼
+        30-Day SKU Forecast
+                │
+                ├──────────────► SHAP Explainability
+                │
+                ▼
+        Inventory Optimization
+        ├── Safety Stock
+        ├── Reorder Point
+        ├── EOQ
+        └── Recommended Order
+                │
+        ┌───────┴────────┐
+        ▼                ▼
+ Supplier Risk     Business Impact
+        │                │
+        └───────┬────────┘
+                ▼
+        Executive Control Tower
+                │
+                ▼
+          Streamlit Dashboard
 ```
 
-## What the system does
+## What is implemented
 
-1. **Generates** a reproducible synthetic Indian retail dataset.
-2. **Loads** the data into PostgreSQL for relational business analysis.
-3. **Explores** revenue, product, store, seasonality, and stockout patterns.
-4. **Analyzes** demand trend, seasonality, stationarity, ACF, and PACF.
-5. **Benchmarks** ARIMA, SARIMA, and SARIMAX forecasting approaches.
-6. **Forecasts** demand with XGBoost using lag, rolling, calendar, promotion, and discount features.
-7. **Optimizes inventory** using forecast-driven lead-time demand, safety stock, reorder point, EOQ, and an operational demand cap.
-8. **Scores supplier risk** using lead time, delivery reliability, defects, delays, and fill-rate signals.
-9. **Creates a control-tower dataset** combining forecast, inventory, supplier, and business priority signals.
+1. Reproducible synthetic retail data covering **2023–2024**, 5 stores, 30 products, 8 suppliers, and 109,650 daily records.
+2. Store × product demand aggregation with leakage-safe lag and rolling features.
+3. Comparable **1-day naive and 7-day seasonal-naive baselines**.
+4. **XGBoost** SKU/store forecasting with chronological evaluation.
+5. 30-day recursive forecasts for every eligible store/SKU pair.
+6. Forecast-driven **Safety Stock, Reorder Point, EOQ, and replenishment recommendations**.
+7. Supplier risk scoring from delivery reliability, defects, delays, and fill rate.
+8. Control-tower priority logic: **URGENT → HIGH → MEDIUM → LOW**.
+9. Historical stockout/lost-sales and current inventory business KPIs.
+10. **SHAP** feature importance aligned with the same SKU-level XGBoost feature set.
+11. Streamlit dashboard for operational filtering, forecasting, supplier risk, and business impact.
+12. A deterministic `src/run_pipeline.py` entry point with failure propagation.
 
 ## Dataset
 
-The project uses synthetic retail data rather than proprietary customer or company data.
+The project uses synthetic data; no proprietary customer or company data is included.
 
 | Property | Value |
 |---|---:|
@@ -71,105 +71,126 @@ The project uses synthetic retail data rather than proprietary customer or compa
 | Products | 30 |
 | Suppliers | 8 |
 | Records | 109,650 |
+| Store × SKU pairs | 150 |
 
-The primary dataset is `data/retail_sales_data.csv`.
+Primary dataset: `data/retail_sales_data.csv`.
 
 ## Forecasting
 
-### Statistical baselines
+### Fair baseline comparison
 
-- ARIMA
-- SARIMA
-- SARIMAX
+The operational forecasting path evaluates baselines at the same **store × SKU level** and uses the same final 60-day chronological test window as XGBoost:
 
-The models use a chronological split and provide MAE, RMSE, and MAPE comparisons.
+- Naive-1-Day
+- Seasonal-Naive-7-Day
+- XGBoost
 
-### XGBoost
+Metrics:
 
-The ML forecasting pipeline uses features including:
+- MAE
+- RMSE
+- MAPE
+
+The repository does **not** claim XGBoost is best without comparing it against these baselines.
+
+### XGBoost features
 
 ```text
 lag_1, lag_7, lag_14, lag_30
-rolling_mean_7, rolling_mean_30
-rolling_std_7
+rolling_mean_7, rolling_mean_30, rolling_std_7
 month, day_of_week, day_of_month, is_weekend
-promo_event, average_discount
+promo_event, discount_pct
 ```
 
-The repository's current XGBoost results are stored in `data/xgboost_results.csv` and the 30-day forecast in `data/30_day_xgboost_forecast.csv`.
+### Explainability
+
+`src/shap_explainability.py` produces feature-level SHAP importance from the same SKU/store XGBoost formulation used by the operational forecast.
 
 ## Inventory Optimization
 
-The forecast is converted into operational decisions:
+The forecast is translated into operational decisions:
 
 ```text
 Forecast Daily Demand
         ↓
 Lead-Time Demand
         ↓
-Safety Stock
+Safety Stock (95% service-level z)
         ↓
-Forecast-Driven ROP
+Reorder Point
         ↓
 EOQ
         ↓
 30-Day Operational Cap
         ↓
-Recommended Order Quantity
+Recommended Replenishment
 ```
 
-The final inventory output is `data/inventory_optimization_results.csv`.
+Annual demand is annualized from the actual observed date span rather than assuming the dataset contains exactly one year.
+
+The system separately reports:
+
+- current stockouts
+- historical stockout days/rate
+- low inventory coverage (<7 days)
+- critical inventory pairs
+- reorder pairs
+- recommended replenishment units
 
 ## Supplier Risk
 
-Supplier risk is based on explainable operational indicators such as:
+Supplier risk uses:
 
-- Average lead time
-- On-time delivery rate
-- Defect rate
-- Supplier delays
-- Fill rate
+- average lead time
+- on-time delivery
+- defect rate
+- supplier delays
+- fill rate
 
-Output: `data/supplier_risk_analysis.csv`.
+Risk levels are **LOW / MEDIUM / HIGH** and feed the control-tower priority engine.
 
-## Control Tower
+## Business Impact
 
-`src/create_control_tower.py` combines:
+`src/business_impact.py` reports historical and current operational signals rather than incorrectly labeling low inventory coverage as stockout risk:
 
-- Inventory status
-- Recommended order quantity
-- Supplier risk
-- 30-day forecast KPIs
-- Business priority
+- current stockout pairs
+- historical stockout days
+- historical lost-sales value
+- current inventory value
+- recommended replenishment
+- critical/reorder/normal inventory counts
+- low-coverage pairs
 
-Output: `data/control_tower_inventory.csv`.
+## Streamlit Control Tower
+
+Run:
+
+```bash
+streamlit run app.py
+```
+
+Dashboard sections:
+
+- 🚨 Control Tower — filters and prioritized actions
+- 📈 SKU Forecast — 30-day store/SKU forecast
+- 🏭 Supplier Risk — supplier risk distribution and details
+- 💰 Business Impact — stockouts, lost sales, inventory value, replenishment
 
 ## Repository Structure
 
 ```text
 .
+├── app.py
 ├── data/
-│   ├── retail_sales_data.csv
-│   ├── daily_demand.csv
-│   ├── 30_day_statistical_forecast.csv
-│   ├── statistical_model_results.csv
-│   ├── 30_day_xgboost_forecast.csv
-│   ├── xgboost_results.csv
-│   ├── xgboost_feature_importance.csv
-│   ├── inventory_optimization_results.csv
-│   ├── supplier_risk_analysis.csv
-│   └── control_tower_inventory.csv
-│
+│   └── retail_sales_data.csv
 ├── images/
 │   ├── banner.png
 │   ├── Interface.png
 │   ├── business/
 │   ├── forecasting/
 │   └── time_series/
-│
 ├── sql/
 │   └── 01_business_analysis.sql
-│
 ├── src/
 │   ├── generate_dataset.py
 │   ├── load_to_postgres.py
@@ -177,14 +198,20 @@ Output: `data/control_tower_inventory.csv`.
 │   ├── time_series_analysis.py
 │   ├── statistical_forecasting.py
 │   ├── xgboost_forecasting.py
+│   ├── baseline_forecasting.py
+│   ├── sku_level_forecasting.py
 │   ├── inventory_optimization.py
 │   ├── supplier_risk.py
-│   └── create_control_tower.py
-│
+│   ├── create_control_tower.py
+│   ├── business_impact.py
+│   ├── shap_explainability.py
+│   └── run_pipeline.py
 ├── .gitignore
 ├── requirements.txt
 └── README.md
 ```
+
+Generated CSV outputs are intentionally **not committed**. They are recreated by the pipeline.
 
 ## Installation
 
@@ -206,91 +233,55 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Run the pipeline
-
-### 1. Generate the dataset
+## Run the operational pipeline
 
 ```bash
-python src/generate_dataset.py
+python src/run_pipeline.py
 ```
 
-### 2. Load PostgreSQL
+The pipeline runs, in order:
 
-Configure the database connection used by `src/load_to_postgres.py`, then run:
+```text
+1. baseline_forecasting.py
+2. sku_level_forecasting.py
+3. inventory_optimization.py
+4. supplier_risk.py
+5. create_control_tower.py
+6. business_impact.py
+7. shap_explainability.py
+```
+
+Then launch the dashboard:
 
 ```bash
-python src/load_to_postgres.py
+streamlit run app.py
 ```
 
-### 3. Run SQL analysis
+## Optional analytical modules
 
-Execute `sql/01_business_analysis.sql` against the PostgreSQL database.
-
-### 4. Run EDA
+For deeper portfolio analysis, the repository also contains:
 
 ```bash
 python src/eda.py
-```
-
-Charts are written to `images/business/`.
-
-### 5. Run time-series analysis
-
-```bash
 python src/time_series_analysis.py
-```
-
-Charts are written to `images/time_series/`.
-
-### 6. Run statistical forecasting
-
-```bash
 python src/statistical_forecasting.py
-```
-
-### 7. Run XGBoost forecasting
-
-```bash
 python src/xgboost_forecasting.py
 ```
 
-### 8. Run inventory optimization
+These modules support the exploratory/statistical analysis layer; the operational control-tower pipeline is driven by the SKU-level forecasting path above.
 
-```bash
-python src/inventory_optimization.py
-```
+## PostgreSQL / SQL
 
-### 9. Run supplier-risk analysis
-
-```bash
-python src/supplier_risk.py
-```
-
-### 10. Build the control tower
-
-```bash
-python src/create_control_tower.py
-```
-
-## Key outputs
-
-```text
-data/30_day_xgboost_forecast.csv
-      ↓
-data/inventory_optimization_results.csv
-      +
-data/supplier_risk_analysis.csv
-      ↓
-data/control_tower_inventory.csv
-```
+`src/load_to_postgres.py` and `sql/01_business_analysis.sql` provide the relational analytics layer. Database credentials should be supplied through environment variables or local configuration and never committed.
 
 ## Technology
 
-**Python · Pandas · NumPy · Scikit-learn · XGBoost · Statsmodels · PostgreSQL · SQL · Matplotlib · Seaborn**
+**Python · Pandas · NumPy · Scikit-learn · XGBoost · Statsmodels · SHAP · Streamlit · PostgreSQL · SQL · Matplotlib · Seaborn**
 
-## Notes
+## Important limitations
 
 - The dataset is synthetic and intended for portfolio/learning use.
-- Forecasting uses chronological evaluation rather than random train/test splitting.
-- Inventory formulas are simplified operational models, not production procurement policies.
-- Database credentials should be supplied through environment variables or local configuration and never committed to Git.
+- Inventory formulas are simplified decision-support models, not production procurement policies.
+- Recursive 30-day forecasts assume future promotion/discount inputs are zero unless explicitly modeled.
+- Supplier risk thresholds are business-rule heuristics and should be calibrated for a real organization.
+- Forecast metrics should be interpreted alongside the naive baselines rather than in isolation.
