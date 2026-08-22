@@ -55,31 +55,43 @@ Synthetic Retail Data
 8. Control-tower priority logic: **URGENT → HIGH → MEDIUM → LOW**.
 9. Historical stockout/lost-sales and current inventory business KPIs.
 10. **SHAP** feature importance aligned with the same SKU-level XGBoost feature set.
-11. Streamlit dashboard for operational filtering, forecasting, supplier risk, and business impact.
-12. A deterministic `src/run_pipeline.py` entry point with failure propagation.
+11. Streamlit dashboard for operational filtering, forecasting, model benchmarking, supplier risk, and business impact.
+12. A deterministic `src/run_pipeline.py` entry point with post-run output validation.
 
-## Dataset
+## Latest validated benchmark
 
-The project uses synthetic data; no proprietary customer or company data is included.
+The latest local end-to-end run used the same Store × SKU population and chronological test window for all three forecasting approaches:
 
-| Property | Value |
+| Model | MAE | RMSE | MAPE |
+|---|---:|---:|---:|
+| Naive-1-Day | 10.52 | 15.38 | 23.66% |
+| Seasonal-Naive-7-Day | 8.93 | 13.30 | 19.83% |
+| **XGBoost** | **5.79** | **8.28** | **13.38%** |
+
+Relative to the seasonal-naive baseline, the validated XGBoost run achieved approximately **35.1% lower MAE, 37.7% lower RMSE, and 32.5% lower MAPE**.
+
+### Latest operational snapshot
+
+From the same successful pipeline run:
+
+| Signal | Value |
 |---|---:|
-| Time period | 2023–2024 |
-| Frequency | Daily |
-| Stores | 5 |
-| Categories | 6 |
-| Products | 30 |
-| Suppliers | 8 |
-| Records | 109,650 |
 | Store × SKU pairs | 150 |
+| Current stockout pairs | 44 |
+| Historical stockout rate | 15.76% |
+| Low coverage (<7 days) | 93 |
+| Critical inventory pairs | 59 |
+| Reorder inventory pairs | 48 |
+| Recommended replenishment | 117,294 units |
+| High supplier-risk suppliers | 0 |
 
-Primary dataset: `data/retail_sales_data.csv`.
+These are **synthetic simulation results**, not real-world business savings.
 
 ## Forecasting
 
 ### Fair baseline comparison
 
-The operational forecasting path evaluates baselines at the same **store × SKU level** and uses the same final 60-day chronological test window as XGBoost:
+The operational forecasting path evaluates baselines at the same **store × SKU level** and uses the same final chronological test window as XGBoost:
 
 - Naive-1-Day
 - Seasonal-Naive-7-Day
@@ -105,6 +117,8 @@ promo_event, discount_pct
 ### Explainability
 
 `src/shap_explainability.py` produces feature-level SHAP importance from the same SKU/store XGBoost formulation used by the operational forecast.
+
+The latest run's strongest features were the 7-day rolling mean, 30-day rolling mean, day of week, month, and promotion signal.
 
 ## Inventory Optimization
 
@@ -161,6 +175,8 @@ Risk levels are **LOW / MEDIUM / HIGH** and feed the control-tower priority engi
 - critical/reorder/normal inventory counts
 - low-coverage pairs
 
+> **Important:** historical lost-sales value is simulated exposure. It is not money saved by the system.
+
 ## Streamlit Control Tower
 
 Run:
@@ -173,6 +189,7 @@ Dashboard sections:
 
 - 🚨 Control Tower — filters and prioritized actions
 - 📈 SKU Forecast — 30-day store/SKU forecast
+- 📊 Model Benchmark — MAE/RMSE/MAPE comparison
 - 🏭 Supplier Risk — supplier risk distribution and details
 - 💰 Business Impact — stockouts, lost sales, inventory value, replenishment
 
@@ -205,6 +222,7 @@ Dashboard sections:
 │   ├── create_control_tower.py
 │   ├── business_impact.py
 │   ├── shap_explainability.py
+│   ├── validate_outputs.py
 │   └── run_pipeline.py
 ├── .gitignore
 ├── requirements.txt
@@ -249,7 +267,10 @@ The pipeline runs, in order:
 5. create_control_tower.py
 6. business_impact.py
 7. shap_explainability.py
+8. validate_outputs.py
 ```
+
+The final validation checks required output schemas, non-empty artifacts, Store × SKU forecast coverage, and whether XGBoost beats the seasonal-naive benchmark on MAE/RMSE/MAPE.
 
 Then launch the dashboard:
 
