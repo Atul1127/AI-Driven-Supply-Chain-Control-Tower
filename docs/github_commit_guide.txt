@@ -1,0 +1,52 @@
+# GitHub Commit Guide
+# Retail Sales Forecasting & Inventory Optimization
+# ====================================================
+# Copy-paste these commands in order after running python main.py
+
+# INITIAL SETUP
+git init
+git add README.md .gitignore requirements.txt
+git commit -m "chore: initial project setup with README and dependencies"
+
+git remote add origin https://github.com/YOUR_USERNAME/Retail-Sales-Forecasting-Inventory-Optimization.git
+git branch -M main
+git push -u origin main
+
+# DAY 1: Source code
+git add src/
+git commit -m "feat: add core pipeline modules (data gen, preprocess, EDA, forecasting, inventory)"
+git push
+
+# DAY 2: Notebook
+git add notebooks/
+git commit -m "feat: add interactive Jupyter notebook with full pipeline walkthrough"
+git push
+
+# DAY 3: Documentation
+git add docs/ setup.py
+git commit -m "docs: add comprehensive project guide, troubleshooting, and interview prep"
+git push
+
+# DAY 4: Outputs (charts only – not CSVs)
+git add outputs/charts/
+git commit -m "feat: add 14 EDA + forecasting + inventory visualization charts"
+git push
+
+# DAY 5: Images/screenshots
+git add images/
+git commit -m "docs: add project screenshots and demo assets"
+git push
+
+# ─── Repository Settings ───────────────────────────────────────────────────
+# Repository Name:
+#   Retail-Sales-Forecasting-Inventory-Optimization
+#
+# Description:
+#   End-to-end retail demand forecasting & inventory optimization using Random Forest ML.
+#   Python · scikit-learn · Pandas · Matplotlib | Data Science Portfolio Project
+#
+# Topics (add these on GitHub):
+#   python data-science machine-learning retail-analytics inventory-optimization
+#   time-series forecasting random-forest pandas scikit-learn supply-chain
+#
+# Pin this repo on your GitHub profile!
