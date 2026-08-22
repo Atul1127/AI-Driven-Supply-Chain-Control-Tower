@@ -39,11 +39,16 @@ def build_features(group):
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     raw = pd.read_csv(DATA_PATH, parse_dates=["date"])
-    # Aggregate duplicate rows to one observation per store/product/day.
+    required = {"store", "product", "category", "date", "demand", "promo_event", "discount_pct", "unit_price"}
+    missing = required - set(raw.columns)
+    if missing:
+        raise ValueError(f"Dataset is missing required columns: {sorted(missing)}")
+
+    # One observation per store/product/day. The source dataset uses closing_stock,
+    # not stock_level; inventory state is intentionally handled downstream.
     daily = raw.groupby(["store", "product", "category", "date"], as_index=False).agg(
         demand=("demand", "sum"), promo_event=("promo_event", "sum"),
-        discount_pct=("discount_pct", "mean"), stock_level=("stock_level", "last"),
-        unit_price=("unit_price", "mean"), lost_sales=("lost_sales", "sum")
+        discount_pct=("discount_pct", "mean"), unit_price=("unit_price", "mean")
     )
 
     parts = []
@@ -51,9 +56,14 @@ def main():
         part = build_features(group)
         if len(part) > 60:
             parts.append(part)
+    if not parts:
+        raise ValueError("No store/product series has enough history for lag features.")
+
     data = pd.concat(parts, ignore_index=True).dropna(subset=FEATURES)
     cutoff = data.date.max() - pd.Timedelta(days=60)
     train, test = data[data.date <= cutoff], data[data.date > cutoff]
+    if train.empty or test.empty:
+        raise ValueError("Temporal split produced an empty train or test set.")
 
     model = XGBRegressor(n_estimators=400, learning_rate=0.05, max_depth=6, subsample=0.8, colsample_bytree=0.8, objective="reg:squarederror", random_state=42, n_jobs=-1)
     model.fit(train[FEATURES], train.demand, verbose=False)
@@ -71,7 +81,6 @@ def main():
     test_out["predicted_demand"] = pred
     test_out.to_csv("data/sku_test_predictions.csv", index=False)
 
-    # Recursive 30-day forecast for every store/product pair using recent history.
     forecasts = []
     for (store, product), group in daily.groupby(["store", "product"], sort=False):
         hist = group.sort_values("date").copy()
@@ -88,16 +97,19 @@ def main():
                 "lag_1": demand_series.iloc[-1], "lag_7": demand_series.iloc[-7],
                 "lag_14": demand_series.iloc[-14], "lag_30": demand_series.iloc[-30],
                 "rolling_mean_7": demand_series.tail(7).mean(), "rolling_mean_30": demand_series.tail(30).mean(),
-                "rolling_std_7": demand_series.tail(7).std(), "day_of_week": date.dayofweek,
+                "rolling_std_7": demand_series.tail(30).std(), "day_of_week": date.dayofweek,
                 "month": date.month, "day_of_month": date.day, "is_weekend": int(date.dayofweek >= 5)
             }
-            x = pd.DataFrame([row])
-            prediction = float(max(model.predict(x[FEATURES])[0], 0))
+            prediction = float(max(model.predict(pd.DataFrame([row])[FEATURES])[0], 0))
             forecasts.append({"date": date, "store": store, "product": product, "category": category, "forecast_demand": round(prediction, 2), "unit_price": price})
             hist = pd.concat([hist, pd.DataFrame([{"date": date, "store": store, "product": product, "category": category, "demand": prediction, "promo_event": 0, "discount_pct": 0.0, "unit_price": price}])], ignore_index=True)
 
     forecast_df = pd.DataFrame(forecasts)
+    if forecast_df.empty:
+        raise ValueError("No SKU/store forecasts were generated.")
     forecast_df.to_csv(FORECAST_PATH, index=False)
+    # Compatibility output for legacy scripts while keeping SKU-level rows.
+    forecast_df.to_csv("data/30_day_xgboost_forecast.csv", index=False)
     print(results.to_string(index=False))
     print(f"Saved: {RESULTS_PATH}")
     print(f"Saved: {FORECAST_PATH}")
