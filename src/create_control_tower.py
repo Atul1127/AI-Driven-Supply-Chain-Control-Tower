@@ -7,6 +7,8 @@ SUPPLIER_PATH = "data/supplier_risk_analysis.csv"
 FORECAST_PATH = "data/sku_30_day_forecast.csv"
 OUTPUT_PATH = "data/control_tower_inventory.csv"
 
+PRIORITY_ORDER = {"URGENT": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+
 
 def main():
     inventory = pd.read_csv(INVENTORY_PATH)
@@ -15,7 +17,7 @@ def main():
 
     forecast_kpi = forecast.groupby(["store", "product"], as_index=False).agg(
         average_30_day_forecast=("forecast_demand", "mean"),
-        total_30_day_forecast=("forecast_demand", "sum")
+        total_30_day_forecast=("forecast_demand", "sum"),
     )
 
     control = inventory.merge(forecast_kpi, on=["store", "product"], how="left")
@@ -31,10 +33,11 @@ def main():
     control.loc[control["priority"] == "HIGH", "action"] = "Expedite replenishment"
     control.loc[control["priority"] == "URGENT", "action"] = "Expedite + supplier escalation"
 
-    control = control.sort_values(["priority", "shortage_to_rop"], ascending=[True, False])
+    control["priority_rank"] = control["priority"].map(PRIORITY_ORDER).fillna(9)
+    control = control.sort_values(["priority_rank", "shortage_to_rop"], ascending=[True, False]).drop(columns="priority_rank")
     control.to_csv(OUTPUT_PATH, index=False)
     print(f"Rows: {len(control):,}")
-    print(control["priority"].value_counts().to_string())
+    print(control["priority"].value_counts().reindex(["URGENT", "HIGH", "MEDIUM", "LOW"], fill_value=0).to_string())
     print(f"Saved: {OUTPUT_PATH}")
 
 
