@@ -8,19 +8,27 @@ Pipeline:
 
 XGBoost 30-day forecast
         ↓
-Expected demand during lead time
+Forecast daily demand
+        ↓
+Expected demand during supplier lead time
         ↓
 Safety Stock
         ↓
-Reorder Point
+Forecast-driven Reorder Point
         ↓
 EOQ
         ↓
 Recommended Order Quantity
 
-The inventory decision layer now uses the
-XGBoost demand forecast rather than relying
-only on historical average demand.
+The model uses:
+- XGBoost forecast
+- Historical demand variability
+- Supplier lead time
+- Current inventory
+- EOQ
+
+Business assumptions are intentionally simple
+and transparent for a fresher-level project.
 """
 
 import numpy as np
@@ -37,14 +45,22 @@ FORECAST_PATH = "data/30_day_xgboost_forecast.csv"
 
 OUTPUT_PATH = "data/inventory_optimization_results.csv"
 
+
+# -----------------------------------------------------------------------------
+# Inventory assumptions
+# -----------------------------------------------------------------------------
+
 # 95% service level
 SERVICE_LEVEL_Z = 1.645
 
-# Simple business assumptions
-ORDERING_COST = 500.0
+# Assumed ordering cost per purchase order.
+# This is a transparent business assumption for the project.
+ORDERING_COST = 2000.0
 
-# Annual holding cost = 20% of product value
-HOLDING_RATE = 0.20
+# Annual holding cost as a percentage of product value.
+HOLDING_RATE = 0.25
+
+ANNUAL_DAYS = 365
 
 
 # =============================================================================
@@ -82,22 +98,21 @@ def load_data():
 # CREATE PRODUCT-STORE FORECAST
 # =============================================================================
 
-def create_forecast_input(retail, forecast):
+def create_forecast_input(
+    retail,
+    forecast,
+):
 
     print()
     print("=" * 70)
-    print("PREPARING FORECAST INPUT")
+    print("PREPARING XGBOOST FORECAST")
     print("=" * 70)
 
     # -------------------------------------------------------------------------
-    # The current XGBoost forecast is at total-retail level.
-    #
-    # To make it usable for individual store/product inventory decisions,
-    # we distribute the total forecast according to each product-store's
-    # historical demand share.
+    # Historical demand by store/product.
     # -------------------------------------------------------------------------
 
-    historical_product_store_demand = (
+    product_store_demand = (
         retail.groupby(
             [
                 "store",
@@ -113,23 +128,27 @@ def create_forecast_input(retail, forecast):
         .reset_index()
     )
 
+    # -------------------------------------------------------------------------
+    # Calculate each store/product's historical demand share.
+    # -------------------------------------------------------------------------
+
     total_historical_demand = (
-        historical_product_store_demand[
+        product_store_demand[
             "historical_demand"
         ].sum()
     )
 
-    historical_product_store_demand[
+    product_store_demand[
         "demand_share"
     ] = (
-        historical_product_store_demand[
+        product_store_demand[
             "historical_demand"
         ]
         / total_historical_demand
     )
 
     # -------------------------------------------------------------------------
-    # Average daily XGBoost forecast.
+    # Overall XGBoost forecast.
     # -------------------------------------------------------------------------
 
     average_daily_forecast = (
@@ -145,29 +164,94 @@ def create_forecast_input(retail, forecast):
     )
 
     print(
-        f"Average daily XGBoost forecast: "
+        f"Average daily XGBoost forecast : "
         f"{average_daily_forecast:,.0f}"
     )
 
     print(
-        f"Total 30-day XGBoost forecast: "
+        f"Total 30-day XGBoost forecast  : "
         f"{total_30_day_forecast:,.0f}"
     )
 
     # -------------------------------------------------------------------------
-    # Allocate the overall forecast to each store/product.
+    # Allocate overall forecast to each store/product using historical share.
     # -------------------------------------------------------------------------
 
-    historical_product_store_demand[
+    product_store_demand[
         "forecast_daily_demand"
     ] = (
-        historical_product_store_demand[
+        product_store_demand[
             "demand_share"
         ]
         * average_daily_forecast
     )
 
-    return historical_product_store_demand
+    return product_store_demand
+
+
+# =============================================================================
+# DEMAND VARIABILITY
+# =============================================================================
+
+def calculate_demand_variability(
+    retail,
+):
+
+    # -------------------------------------------------------------------------
+    # Store + product level variability.
+    # -------------------------------------------------------------------------
+
+    store_product_std = (
+        retail.groupby(
+            [
+                "store",
+                "product",
+            ]
+        )
+        .agg(
+            demand_std=(
+                "demand",
+                "std",
+            )
+        )
+        .reset_index()
+    )
+
+    # -------------------------------------------------------------------------
+    # Product-level fallback.
+    #
+    # If a store/product combination has insufficient observations,
+    # use the overall product variability.
+    # -------------------------------------------------------------------------
+
+    product_std = (
+        retail.groupby(
+            "product"
+        )
+        .agg(
+            product_demand_std=(
+                "demand",
+                "std",
+            )
+        )
+        .reset_index()
+    )
+
+    # -------------------------------------------------------------------------
+    # Overall fallback.
+    # -------------------------------------------------------------------------
+
+    overall_std = (
+        retail[
+            "demand"
+        ].std()
+    )
+
+    return (
+        store_product_std,
+        product_std,
+        overall_std,
+    )
 
 
 # =============================================================================
@@ -181,11 +265,11 @@ def calculate_inventory_metrics(
 
     print()
     print("=" * 70)
-    print("CALCULATING FORECAST-DRIVEN INVENTORY METRICS")
+    print("CALCULATING INVENTORY METRICS")
     print("=" * 70)
 
     # -------------------------------------------------------------------------
-    # Historical inventory / supplier metrics.
+    # Current inventory and supplier information.
     # -------------------------------------------------------------------------
 
     inventory_metrics = (
@@ -204,11 +288,6 @@ def calculate_inventory_metrics(
             supplier=(
                 "supplier",
                 "first",
-            ),
-
-            demand_std=(
-                "demand",
-                "std",
             ),
 
             annual_demand=(
@@ -235,7 +314,7 @@ def calculate_inventory_metrics(
     )
 
     # -------------------------------------------------------------------------
-    # Attach XGBoost forecast.
+    # Add forecast.
     # -------------------------------------------------------------------------
 
     inventory_metrics = inventory_metrics.merge(
@@ -254,13 +333,80 @@ def calculate_inventory_metrics(
     )
 
     # -------------------------------------------------------------------------
+    # Calculate demand variability at multiple levels.
+    # -------------------------------------------------------------------------
+
+    (
+        store_product_std,
+        product_std,
+        overall_std,
+    ) = calculate_demand_variability(
+        retail
+    )
+
+    inventory_metrics = inventory_metrics.merge(
+        store_product_std,
+        on=[
+            "store",
+            "product",
+        ],
+        how="left",
+    )
+
+    inventory_metrics = inventory_metrics.merge(
+        product_std,
+        on="product",
+        how="left",
+    )
+
+    # -------------------------------------------------------------------------
+    # SAFETY STOCK FALLBACK LOGIC
+    #
+    # Priority:
+    #
+    # 1. Store/product demand standard deviation
+    # 2. Product-level demand standard deviation
+    # 3. Overall demand standard deviation
+    #
+    # This prevents meaningless zero safety stock values.
+    # -------------------------------------------------------------------------
+
+    inventory_metrics[
+        "demand_std"
+    ] = (
+        inventory_metrics[
+            "demand_std"
+        ]
+        .fillna(
+            inventory_metrics[
+                "product_demand_std"
+            ]
+        )
+        .fillna(
+            overall_std
+        )
+    )
+
+    # If variability is exactly zero, use the overall variability.
+    inventory_metrics[
+        "demand_std"
+    ] = np.where(
+        inventory_metrics[
+            "demand_std"
+        ] <= 0,
+
+        overall_std,
+
+        inventory_metrics[
+            "demand_std"
+        ],
+    )
+
+    # -------------------------------------------------------------------------
     # Safety Stock
     #
     # Safety Stock =
-    # Z × historical demand standard deviation × sqrt(lead time)
-    #
-    # We retain historical variability because it represents uncertainty
-    # around demand.
+    # Z × Demand Std Dev × sqrt(Lead Time)
     # -------------------------------------------------------------------------
 
     inventory_metrics[
@@ -280,10 +426,7 @@ def calculate_inventory_metrics(
     # -------------------------------------------------------------------------
     # EXPECTED DEMAND DURING LEAD TIME
     #
-    # This is the important new step.
-    #
-    # Expected lead-time demand =
-    # forecast daily demand × supplier lead time
+    # Forecast daily demand × supplier lead time
     # -------------------------------------------------------------------------
 
     inventory_metrics[
@@ -316,7 +459,9 @@ def calculate_inventory_metrics(
     )
 
     # -------------------------------------------------------------------------
-    # Holding cost
+    # HOLDING COST
+    #
+    # H = Unit Price × Holding Rate
     # -------------------------------------------------------------------------
 
     inventory_metrics[
@@ -333,7 +478,7 @@ def calculate_inventory_metrics(
     #
     # EOQ = sqrt(2DS / H)
     #
-    # D = annual historical demand
+    # D = annual demand
     # S = ordering cost
     # H = annual holding cost
     # -------------------------------------------------------------------------
@@ -355,38 +500,40 @@ def calculate_inventory_metrics(
     )
 
     # -------------------------------------------------------------------------
-    # Prevent invalid values.
+    # Handle invalid values.
     # -------------------------------------------------------------------------
 
-    inventory_metrics[
-        "safety_stock"
-    ] = inventory_metrics[
-        "safety_stock"
-    ].fillna(0)
+    numeric_columns = [
+        "forecast_daily_demand",
+        "demand_std",
+        "safety_stock",
+        "expected_lead_time_demand",
+        "calculated_rop",
+        "eoq",
+    ]
 
-    inventory_metrics[
-        "expected_lead_time_demand"
-    ] = inventory_metrics[
-        "expected_lead_time_demand"
-    ].fillna(0)
+    for column in numeric_columns:
 
-    inventory_metrics[
-        "calculated_rop"
-    ] = inventory_metrics[
-        "calculated_rop"
-    ].fillna(0)
-
-    inventory_metrics[
-        "eoq"
-    ] = inventory_metrics[
-        "eoq"
-    ].replace(
-        [np.inf, -np.inf],
-        0,
-    ).fillna(0)
+        inventory_metrics[column] = (
+            inventory_metrics[column]
+            .replace(
+                [np.inf, -np.inf],
+                np.nan,
+            )
+            .fillna(0)
+        )
 
     # -------------------------------------------------------------------------
-    # Inventory status
+    # INVENTORY STATUS
+    #
+    # CRITICAL:
+    # Current stock <= Safety Stock
+    #
+    # REORDER:
+    # Current stock <= ROP
+    #
+    # NORMAL:
+    # Current stock > ROP
     # -------------------------------------------------------------------------
 
     inventory_metrics[
@@ -415,7 +562,7 @@ def calculate_inventory_metrics(
     )
 
     # -------------------------------------------------------------------------
-    # Shortage relative to ROP.
+    # SHORTAGE TO ROP
     # -------------------------------------------------------------------------
 
     inventory_metrics[
@@ -431,15 +578,15 @@ def calculate_inventory_metrics(
     )
 
     # -------------------------------------------------------------------------
-    # Recommended order quantity.
+    # RECOMMENDED ORDER
     #
-    # If inventory is below ROP:
+    # If current stock is below ROP:
     #
     #     Order EOQ
     #
     # Otherwise:
     #
-    #     Order 0
+    #     No order.
     # -------------------------------------------------------------------------
 
     inventory_metrics[
@@ -451,9 +598,11 @@ def calculate_inventory_metrics(
         <= inventory_metrics[
             "calculated_rop"
         ],
+
         inventory_metrics[
             "eoq"
         ],
+
         0,
     )
 
@@ -483,6 +632,16 @@ def calculate_inventory_metrics(
             .astype(int)
         )
 
+    # -------------------------------------------------------------------------
+    # Remove helper columns from final output.
+    # -------------------------------------------------------------------------
+
+    inventory_metrics = inventory_metrics.drop(
+        columns=[
+            "product_demand_std",
+        ]
+    )
+
     return inventory_metrics
 
 
@@ -490,7 +649,9 @@ def calculate_inventory_metrics(
 # SUMMARY
 # =============================================================================
 
-def create_summary(results):
+def create_summary(
+    results,
+):
 
     print()
     print("=" * 70)
@@ -521,7 +682,18 @@ def create_summary(results):
         ].sum()
     )
 
+    critical_items = (
+        results[
+            "inventory_status"
+        ]
+        == "CRITICAL"
+    ).sum()
+
     print()
+    print(
+        f"Critical items          : {critical_items}"
+    )
+
     print(
         f"Items requiring reorder : {reorder_items}"
     )
@@ -533,10 +705,12 @@ def create_summary(results):
 
 
 # =============================================================================
-# TOP RECOMMENDATIONS
+# TOP REORDER RECOMMENDATIONS
 # =============================================================================
 
-def show_top_reorders(results):
+def show_top_reorders(
+    results,
+):
 
     print()
     print("=" * 70)
@@ -551,8 +725,14 @@ def show_top_reorders(results):
             > 0
         ]
         .sort_values(
-            "shortage_to_rop",
-            ascending=False,
+            [
+                "inventory_status",
+                "shortage_to_rop",
+            ],
+            ascending=[
+                True,
+                False,
+            ],
         )
         .head(20)
     )
@@ -564,6 +744,7 @@ def show_top_reorders(results):
         "forecast_daily_demand",
         "lead_time_days",
         "expected_lead_time_demand",
+        "demand_std",
         "safety_stock",
         "calculated_rop",
         "current_stock",
@@ -583,10 +764,12 @@ def show_top_reorders(results):
 
 
 # =============================================================================
-# SAVE
+# SAVE RESULTS
 # =============================================================================
 
-def save_results(results):
+def save_results(
+    results,
+):
 
     status_order = {
         "CRITICAL": 1,
@@ -600,7 +783,9 @@ def save_results(results):
         results[
             "inventory_status"
         ]
-        .map(status_order)
+        .map(
+            status_order
+        )
     )
 
     results = results.sort_values(
@@ -616,7 +801,7 @@ def save_results(results):
 
     results = results.drop(
         columns=[
-            "status_order"
+            "status_order",
         ]
     )
 
@@ -642,14 +827,33 @@ def main():
     print("FORECAST-DRIVEN INVENTORY OPTIMIZATION")
     print("=" * 70)
 
+    print()
+    print(
+        "Business assumptions:"
+    )
+
+    print(
+        f"Service level      : 95%"
+    )
+
+    print(
+        f"Ordering cost      : ₹{ORDERING_COST:,.0f}"
+    )
+
+    print(
+        f"Holding rate       : {HOLDING_RATE * 100:.0f}%"
+    )
+
+    print()
+
     # -------------------------------------------------------------------------
-    # Load
+    # Load data
     # -------------------------------------------------------------------------
 
     retail, forecast = load_data()
 
     # -------------------------------------------------------------------------
-    # Prepare product-store forecast
+    # Prepare forecast
     # -------------------------------------------------------------------------
 
     forecast_input = create_forecast_input(
@@ -675,7 +879,7 @@ def main():
     )
 
     # -------------------------------------------------------------------------
-    # Recommendations
+    # Top recommendations
     # -------------------------------------------------------------------------
 
     show_top_reorders(
@@ -692,7 +896,9 @@ def main():
 
     print()
     print("=" * 70)
-    print("FORECAST-DRIVEN INVENTORY OPTIMIZATION COMPLETE")
+    print(
+        "FORECAST-DRIVEN INVENTORY OPTIMIZATION COMPLETE"
+    )
     print("=" * 70)
 
 
