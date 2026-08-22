@@ -1,4 +1,4 @@
-"""Run the reproducible supply-chain control-tower pipeline."""
+"""Run and validate the reproducible supply-chain control-tower pipeline."""
 
 import subprocess
 import sys
@@ -11,6 +11,7 @@ STEPS = [
     "src/create_control_tower.py",
     "src/business_impact.py",
     "src/shap_explainability.py",
+    "src/validate_outputs.py",
 ]
 
 
@@ -20,7 +21,7 @@ def main():
         result = subprocess.run([sys.executable, script], check=False)
         if result.returncode != 0:
             raise SystemExit(f"Pipeline stopped: {script} exited with code {result.returncode}")
-    print("\nPipeline completed successfully.")
+    print("\nPipeline completed and outputs validated successfully.")
 
 
 if __name__ == "__main__":
