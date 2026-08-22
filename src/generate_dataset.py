@@ -330,8 +330,8 @@ def generate():
 
                 initial_stock = int(
                     np.random.randint(
-                        200,
-                        600,
+                        400,
+                        800,
                     )
                 )
 
@@ -341,15 +341,15 @@ def generate():
 
                 reorder_point = int(
                     np.random.randint(
-                        50,
-                        100,
+                        120,
+                        200,
                     )
                 )
 
                 reorder_qty = int(
                     np.random.randint(
-                        100,
-                        300,
+                        250,
+                        500,
                     )
                 )
 
