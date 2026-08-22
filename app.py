@@ -35,21 +35,19 @@ priority = control.get("priority", pd.Series(dtype=str)).astype(str)
 inventory_status = control.get("inventory_status", pd.Series(dtype=str)).astype(str)
 risk_level = control.get("risk_level", pd.Series(dtype=str)).astype(str)
 
-# Executive KPIs
 kpi = st.columns(6)
 kpi[0].metric("Store × SKU", f"{len(control):,}")
-kpi[1].metric("High Priority", int((priority.isin(["HIGH", "URGENT"])).sum()))
+kpi[1].metric("High Priority", int(priority.isin(["HIGH", "URGENT"]).sum()))
 kpi[2].metric("Critical", int((inventory_status == "CRITICAL").sum()))
 kpi[3].metric("Reorder", int((inventory_status == "REORDER").sum()))
 kpi[4].metric("Supplier Risk", int((risk_level == "HIGH").sum()))
 if not impact.empty:
-    pct = impact.iloc[0].get("stockout_risk_pct", 0)
-    kpi[5].metric("Stockout Risk", f"{float(pct):.1f}%")
+    row = impact.iloc[0]
+    kpi[5].metric("Current Stockouts", f"{int(row.get('current_stockout_pairs', 0)):,}")
 else:
-    kpi[5].metric("Stockout Risk", "—")
+    kpi[5].metric("Current Stockouts", "—")
 
 st.divider()
-
 tab1, tab2, tab3, tab4 = st.tabs(["🚨 Control Tower", "📈 SKU Forecast", "🏭 Supplier Risk", "💰 Business Impact"])
 
 with tab1:
@@ -59,8 +57,7 @@ with tab1:
         store_options = ["All stores"] + sorted(control["store"].dropna().unique().tolist())
         store_filter = st.selectbox("Store", store_options)
     with c2:
-        priority_options = ["All priorities"] + ["URGENT", "HIGH", "MEDIUM", "LOW"]
-        priority_filter = st.selectbox("Priority", priority_options)
+        priority_filter = st.selectbox("Priority", ["All priorities", "URGENT", "HIGH", "MEDIUM", "LOW"])
 
     view = control.copy()
     if store_filter != "All stores":
@@ -68,11 +65,7 @@ with tab1:
     if priority_filter != "All priorities":
         view = view[view.priority == priority_filter]
 
-    preferred = [
-        "priority", "action", "store", "product", "category", "supplier",
-        "inventory_status", "days_of_stock", "shortage_to_rop",
-        "recommended_order_qty", "average_30_day_forecast", "risk_level"
-    ]
+    preferred = ["priority", "action", "store", "product", "category", "supplier", "inventory_status", "days_of_stock", "shortage_to_rop", "recommended_order_qty", "average_30_day_forecast", "risk_level"]
     display_cols = [c for c in preferred if c in view.columns]
     st.dataframe(view[display_cols], use_container_width=True, hide_index=True)
 
@@ -86,13 +79,10 @@ with tab2:
         store, product = selected.split(" | ", 1)
         view = forecast[(forecast.store == store) & (forecast.product == product)].copy()
         view["date"] = pd.to_datetime(view["date"])
-        chart = view.set_index("date")[["forecast_demand"]]
-        st.line_chart(chart, height=360)
-        total = view["forecast_demand"].sum()
-        avg = view["forecast_demand"].mean()
+        st.line_chart(view.set_index("date")[["forecast_demand"]], height=360)
         a, b = st.columns(2)
-        a.metric("30-day forecast", f"{total:,.0f} units")
-        b.metric("Average daily demand", f"{avg:,.1f} units")
+        a.metric("30-day forecast", f"{view.forecast_demand.sum():,.0f} units")
+        b.metric("Average daily demand", f"{view.forecast_demand.mean():,.1f} units")
         st.dataframe(view, use_container_width=True, hide_index=True)
 
 with tab3:
@@ -115,8 +105,8 @@ with tab4:
         row = impact.iloc[0]
         b1, b2, b3, b4 = st.columns(4)
         b1.metric("SKU/store pairs", f"{int(row['total_sku_store_pairs']):,}")
-        b2.metric("Stockout-risk pairs", f"{int(row['stockout_risk_pairs']):,}")
-        b3.metric("Lost-sales value", f"₹{float(row['estimated_lost_sales_value']):,.0f}")
+        b2.metric("Current stockouts", f"{int(row['current_stockout_pairs']):,}")
+        b3.metric("Historical lost-sales", f"₹{float(row['historical_lost_sales_value']):,.0f}")
         b4.metric("Inventory value", f"₹{float(row['current_inventory_value']):,.0f}")
         st.dataframe(impact, use_container_width=True, hide_index=True)
 
