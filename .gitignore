@@ -16,7 +16,11 @@ env/
 # Jupyter
 .ipynb_checkpoints/
 
-# Generated outputs
+# Generated pipeline outputs
+/data/*.csv
+!/data/retail_sales_data.csv
+
+# Generated logs / temporary files
 *.log
 *.tmp
 
