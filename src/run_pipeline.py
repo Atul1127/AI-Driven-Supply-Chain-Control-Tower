@@ -1,4 +1,4 @@
-"""Run the portfolio pipeline in a deterministic order."""
+"""Run the reproducible supply-chain control-tower pipeline."""
 
 import subprocess
 import sys
@@ -10,6 +10,7 @@ STEPS = [
     "src/supplier_risk.py",
     "src/create_control_tower.py",
     "src/business_impact.py",
+    "src/shap_explainability.py",
 ]
 
 
