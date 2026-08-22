@@ -3,24 +3,40 @@ generate_dataset.py
 -------------------
 Generates a realistic synthetic retail sales dataset.
 
+Project:
+Intelligent Demand & Supply Chain Control Tower
+
 Coverage:
 - 2 years of daily sales
 - 5 Indian retail stores
 - 6 product categories
 - 30 products
-- Inventory and stockout tracking
-- Supplier and lead-time information
+- Demand, sales and revenue
+- Inventory tracking
+- Stockout and lost-sales tracking
+- Supplier information
+- Supplier lead time and reliability
 - Promotions and discounts
+- Reorder decisions
 """
 
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
 import os
+from datetime import datetime, timedelta
 
-# ─── Configuration ────────────────────────────────────────────────────────────
+import numpy as np
+import pandas as pd
+
+
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
 
 np.random.seed(42)
+
+
+# -----------------------------------------------------------------------------
+# Stores
+# -----------------------------------------------------------------------------
 
 STORES = [
     "Store_Mumbai",
@@ -29,6 +45,11 @@ STORES = [
     "Store_Hyderabad",
     "Store_Pune",
 ]
+
+
+# -----------------------------------------------------------------------------
+# Suppliers
+# -----------------------------------------------------------------------------
 
 SUPPLIERS = [
     "Supplier_01",
@@ -41,6 +62,11 @@ SUPPLIERS = [
     "Supplier_08",
 ]
 
+
+# -----------------------------------------------------------------------------
+# Product Categories
+# -----------------------------------------------------------------------------
+
 CATEGORIES = [
     "Electronics",
     "Clothing",
@@ -49,6 +75,11 @@ CATEGORIES = [
     "Toys",
     "Sports",
 ]
+
+
+# -----------------------------------------------------------------------------
+# Products
+# -----------------------------------------------------------------------------
 
 PRODUCTS = {
     "Electronics": [
@@ -95,21 +126,34 @@ PRODUCTS = {
     ],
 }
 
+
+# -----------------------------------------------------------------------------
+# Date Range
+# -----------------------------------------------------------------------------
+
 START_DATE = datetime(2023, 1, 1)
 END_DATE = datetime(2024, 12, 31)
 
 
-# ─── Seasonal Demand ──────────────────────────────────────────────────────────
+# =============================================================================
+# DEMAND COMPONENTS
+# =============================================================================
 
 def seasonal_factor(date):
     """
     Monthly seasonal multiplier.
 
-    Higher demand during festive periods and selected
-    seasonal periods.
+    Higher demand is simulated during:
+    - January
+    - March/April
+    - July/August
+    - October/November/December
+
+    This gives the time series useful seasonal patterns for
+    SARIMA and SARIMAX.
     """
 
-    peaks = {
+    monthly_factors = {
         1: 1.20,
         2: 1.00,
         3: 1.15,
@@ -124,30 +168,44 @@ def seasonal_factor(date):
         12: 1.80,
     }
 
-    return peaks.get(date.month, 1.0)
+    return monthly_factors[date.month]
 
 
 def day_of_week_factor(date):
-    """Weekend demand boost."""
+    """
+    Weekend demand multiplier.
+    """
 
-    return 1.30 if date.weekday() >= 5 else 1.00
+    if date.weekday() >= 5:
+        return 1.30
+
+    return 1.00
 
 
 def trend_factor(date):
-    """Small upward demand trend over the two-year period."""
+    """
+    Small upward demand trend over the two-year period.
+    """
 
     days_since_start = (date - START_DATE).days
 
-    return 1.0 + (days_since_start / 730) * 0.15
+    total_days = (END_DATE - START_DATE).days
+
+    return 1.0 + (days_since_start / total_days) * 0.15
 
 
-# ─── Supplier Setup ───────────────────────────────────────────────────────────
+# =============================================================================
+# SUPPLIER DATA
+# =============================================================================
 
 def create_supplier_data():
     """
-    Creates simple supplier characteristics.
+    Generate basic supplier characteristics.
 
-    These values will later be used for supplier-risk analysis.
+    These characteristics will later be used for:
+    - Supplier analysis
+    - Supplier risk scoring
+    - Inventory planning
     """
 
     supplier_data = {}
@@ -155,72 +213,156 @@ def create_supplier_data():
     for supplier in SUPPLIERS:
 
         supplier_data[supplier] = {
-            "lead_time_days": np.random.randint(3, 11),
-            "on_time_rate": round(np.random.uniform(0.85, 0.99), 2),
-            "defect_rate": round(np.random.uniform(0.01, 0.08), 2),
+            "lead_time_days": int(np.random.randint(3, 11)),
+            "on_time_rate": round(
+                np.random.uniform(0.85, 0.99),
+                2,
+            ),
+            "defect_rate": round(
+                np.random.uniform(0.01, 0.08),
+                2,
+            ),
         }
 
     return supplier_data
 
 
-# ─── Product-Supplier Mapping ─────────────────────────────────────────────────
+# =============================================================================
+# PRODUCT-SUPPLIER MAPPING
+# =============================================================================
 
 def create_product_supplier_mapping():
     """
-    Assigns one supplier to each product.
+    Assign one supplier to each product.
+
+    Keeping one supplier per product keeps the project simple while
+    still allowing supplier-risk analysis.
     """
 
-    mapping = {}
+    product_supplier = {}
 
     for category, products in PRODUCTS.items():
 
         for product_name, _ in products:
 
-            mapping[product_name] = np.random.choice(SUPPLIERS)
+            product_supplier[product_name] = np.random.choice(
+                SUPPLIERS
+            )
 
-    return mapping
+    return product_supplier
 
 
-# ─── Main Dataset Generator ──────────────────────────────────────────────────
+# =============================================================================
+# DATASET GENERATION
+# =============================================================================
 
 def generate():
 
     records = []
 
+    # -------------------------------------------------------------------------
+    # Generate dates
+    # -------------------------------------------------------------------------
+
+    number_of_days = (END_DATE - START_DATE).days + 1
+
     dates = [
         START_DATE + timedelta(days=i)
-        for i in range((END_DATE - START_DATE).days + 1)
+        for i in range(number_of_days)
     ]
+
+    # -------------------------------------------------------------------------
+    # Create supplier information
+    # -------------------------------------------------------------------------
 
     supplier_data = create_supplier_data()
 
+    # -------------------------------------------------------------------------
+    # Assign products to suppliers
+    # -------------------------------------------------------------------------
+
     product_supplier = create_product_supplier_mapping()
+
+    # =========================================================================
+    # STORE LOOP
+    # =========================================================================
 
     for store in STORES:
 
         # Each store has a slightly different demand level.
-        store_factor = np.random.uniform(0.80, 1.20)
+        store_factor = np.random.uniform(
+            0.80,
+            1.20,
+        )
+
+        # =====================================================================
+        # CATEGORY LOOP
+        # =====================================================================
 
         for category, products in PRODUCTS.items():
 
-            # Category-level demand variation.
-            category_factor = np.random.uniform(0.90, 1.10)
+            # Each category has slightly different demand behavior.
+            category_factor = np.random.uniform(
+                0.90,
+                1.10,
+            )
+
+            # =================================================================
+            # PRODUCT LOOP
+            # =================================================================
 
             for product_name, unit_price in products:
 
-                # Product-level baseline demand.
-                base_demand = np.random.randint(5, 40)
+                # -------------------------------------------------------------
+                # Product demand characteristics
+                # -------------------------------------------------------------
 
-                # Initial inventory.
-                initial_stock = np.random.randint(200, 600)
+                base_demand = int(
+                    np.random.randint(
+                        5,
+                        40,
+                    )
+                )
 
-                # Reorder parameters.
-                reorder_point = np.random.randint(50, 100)
-                reorder_qty = np.random.randint(100, 300)
+                # -------------------------------------------------------------
+                # Initial inventory
+                # -------------------------------------------------------------
+
+                initial_stock = int(
+                    np.random.randint(
+                        200,
+                        600,
+                    )
+                )
+
+                # -------------------------------------------------------------
+                # Reorder parameters
+                # -------------------------------------------------------------
+
+                reorder_point = int(
+                    np.random.randint(
+                        50,
+                        100,
+                    )
+                )
+
+                reorder_qty = int(
+                    np.random.randint(
+                        100,
+                        300,
+                    )
+                )
+
+                # -------------------------------------------------------------
+                # Current inventory
+                # -------------------------------------------------------------
 
                 current_stock = initial_stock
 
-                # Supplier assigned to this product.
+                # -------------------------------------------------------------
+                # Supplier information
+                # -------------------------------------------------------------
+
                 supplier = product_supplier[product_name]
 
                 supplier_info = supplier_data[supplier]
@@ -229,12 +371,24 @@ def generate():
                 on_time_rate = supplier_info["on_time_rate"]
                 defect_rate = supplier_info["defect_rate"]
 
-                # Track one outstanding purchase order.
+                # -------------------------------------------------------------
+                # Purchase order currently in transit
+                #
+                # We keep this simple:
+                # One outstanding order per product/store combination.
+                # -------------------------------------------------------------
+
                 pending_order = None
+
+                # =============================================================
+                # DAILY LOOP
+                # =============================================================
 
                 for date in dates:
 
-                    # ─── Receive pending order ───────────────────────────────
+                    # =========================================================
+                    # 1. RECEIVE PENDING PURCHASE ORDER
+                    # =========================================================
 
                     received_qty = 0
                     supplier_delay = 0
@@ -243,46 +397,33 @@ def generate():
 
                         if date >= pending_order["arrival_date"]:
 
+                            current_stock += pending_order["quantity"]
+
                             received_qty = pending_order["quantity"]
 
-                            # Supplier may deliver late.
-                            if np.random.rand() > on_time_rate:
+                            pending_order = None
 
-                                supplier_delay = 1
-
-                                # Delay the actual receipt by 1-3 days.
-                                delayed_arrival = (
-                                    pending_order["arrival_date"]
-                                    + timedelta(days=np.random.randint(1, 4))
-                                )
-
-                                if date < delayed_arrival:
-
-                                    received_qty = 0
-
-                                else:
-
-                                    current_stock += pending_order["quantity"]
-
-                                    pending_order = None
-
-                            else:
-
-                                current_stock += pending_order["quantity"]
-
-                                pending_order = None
-
-                    # ─── Opening Stock ──────────────────────────────────────
+                    # =========================================================
+                    # 2. OPENING STOCK
+                    # =========================================================
 
                     opening_stock = current_stock
 
-                    # ─── Demand Generation ──────────────────────────────────
+                    # =========================================================
+                    # 3. DEMAND GENERATION
+                    # =========================================================
 
                     sf = seasonal_factor(date)
+
                     dwf = day_of_week_factor(date)
+
                     tf = trend_factor(date)
 
-                    noise = np.random.normal(1.0, 0.15)
+                    # Daily random variation.
+                    noise = np.random.normal(
+                        1.0,
+                        0.15,
+                    )
 
                     demand = int(
                         base_demand
@@ -294,137 +435,289 @@ def generate():
                         * category_factor
                     )
 
-                    demand = max(0, demand)
+                    demand = max(
+                        0,
+                        demand,
+                    )
 
-                    # ─── Promotion ──────────────────────────────────────────
+                    # =========================================================
+                    # 4. PROMOTION
+                    # =========================================================
 
-                    promo = 1 if np.random.rand() < 0.05 else 0
+                    promo_event = (
+                        1
+                        if np.random.rand() < 0.05
+                        else 0
+                    )
 
-                    if promo:
-                        demand = int(demand * 1.5)
+                    if promo_event == 1:
 
-                    # ─── Sales / Stockout ───────────────────────────────────
+                        demand = int(
+                            demand * 1.50
+                        )
 
-                    actual_sold = min(demand, current_stock)
+                    # =========================================================
+                    # 5. SALES AND STOCKOUT
+                    # =========================================================
 
-                    stockout = 1 if demand > current_stock else 0
+                    units_sold = min(
+                        demand,
+                        current_stock,
+                    )
 
-                    lost_sales = demand - actual_sold
+                    stockout = (
+                        1
+                        if demand > current_stock
+                        else 0
+                    )
 
-                    current_stock -= actual_sold
+                    lost_sales = (
+                        demand - units_sold
+                    )
 
-                    # ─── Pricing ────────────────────────────────────────────
+                    # Remove sold inventory.
+                    current_stock -= units_sold
 
-                    discount_pct = np.random.choice(
-                        [0, 5, 10, 15, 20],
-                        p=[0.70, 0.10, 0.10, 0.05, 0.05],
+                    # =========================================================
+                    # 6. PRICE / DISCOUNT
+                    # =========================================================
+
+                    discount_pct = int(
+                        np.random.choice(
+                            [0, 5, 10, 15, 20],
+                            p=[
+                                0.70,
+                                0.10,
+                                0.10,
+                                0.05,
+                                0.05,
+                            ],
+                        )
                     )
 
                     sell_price = round(
-                        unit_price * (1 - discount_pct / 100),
+                        unit_price
+                        * (1 - discount_pct / 100),
                         2,
                     )
 
                     revenue = round(
-                        actual_sold * sell_price,
+                        units_sold * sell_price,
                         2,
                     )
 
-                    # ─── Reorder Decision ───────────────────────────────────
+                    # =========================================================
+                    # 7. REORDER DECISION
+                    # =========================================================
 
                     reordered = 0
                     ordered_qty = 0
 
-                    # Only place a new order if no order is already pending.
+                    # Only create a new order if:
+                    #
+                    # - inventory is below reorder point
+                    # - there is no order currently in transit
+                    #
                     if (
                         current_stock <= reorder_point
                         and pending_order is None
                     ):
 
                         reordered = 1
+
                         ordered_qty = reorder_qty
 
                         expected_arrival = (
-                            date + timedelta(days=lead_time_days)
+                            date
+                            + timedelta(
+                                days=lead_time_days
+                            )
                         )
 
+                        # -----------------------------------------------------
+                        # Simple supplier delay simulation
+                        #
+                        # If supplier is unreliable, some orders arrive
+                        # two days later than expected.
+                        # -----------------------------------------------------
+
+                        if np.random.rand() > on_time_rate:
+
+                            supplier_delay = 1
+
+                            actual_arrival = (
+                                expected_arrival
+                                + timedelta(days=2)
+                            )
+
+                        else:
+
+                            actual_arrival = expected_arrival
+
                         pending_order = {
-                            "quantity": reorder_qty,
-                            "arrival_date": expected_arrival,
+                            "quantity": ordered_qty,
+                            "arrival_date": actual_arrival,
                         }
 
-                    # ─── Closing Stock ──────────────────────────────────────
+                    # =========================================================
+                    # 8. CLOSING STOCK
+                    # =========================================================
 
                     closing_stock = current_stock
 
-                    # ─── Store Record ───────────────────────────────────────
+                    # =========================================================
+                    # 9. STORE RECORD
+                    # =========================================================
 
                     records.append(
                         {
-                            "date": date.strftime("%Y-%m-%d"),
+                            # -------------------------------------------------
+                            # Date / dimensions
+                            # -------------------------------------------------
+
+                            "date": date.strftime(
+                                "%Y-%m-%d"
+                            ),
+
                             "store": store,
+
                             "category": category,
+
                             "product": product_name,
+
                             "supplier": supplier,
 
+                            # -------------------------------------------------
+                            # Pricing
+                            # -------------------------------------------------
+
                             "unit_price": unit_price,
+
                             "discount_pct": discount_pct,
+
                             "sell_price": sell_price,
 
+                            # -------------------------------------------------
+                            # Demand / sales
+                            # -------------------------------------------------
+
                             "demand": demand,
-                            "units_sold": actual_sold,
+
+                            "units_sold": units_sold,
+
                             "lost_sales": lost_sales,
+
                             "revenue": revenue,
 
+                            # -------------------------------------------------
+                            # Inventory
+                            # -------------------------------------------------
+
                             "opening_stock": opening_stock,
+
                             "closing_stock": closing_stock,
 
                             "reorder_point": reorder_point,
+
                             "reorder_qty": reorder_qty,
 
+                            # -------------------------------------------------
+                            # Reordering
+                            # -------------------------------------------------
+
                             "reordered": reordered,
+
                             "ordered_qty": ordered_qty,
+
                             "received_qty": received_qty,
 
+                            # -------------------------------------------------
+                            # Stockout
+                            # -------------------------------------------------
+
                             "stockout": stockout,
-                            "promo_event": promo,
+
+                            # -------------------------------------------------
+                            # Promotion
+                            # -------------------------------------------------
+
+                            "promo_event": promo_event,
+
+                            # -------------------------------------------------
+                            # Supplier
+                            # -------------------------------------------------
 
                             "lead_time_days": lead_time_days,
+
                             "on_time_rate": on_time_rate,
+
                             "defect_rate": defect_rate,
+
                             "supplier_delay": supplier_delay,
                         }
                     )
 
-    # ─── DataFrame ────────────────────────────────────────────────────────────
+    # =========================================================================
+    # CREATE DATAFRAME
+    # =========================================================================
 
     df = pd.DataFrame(records)
 
-    df["date"] = pd.to_datetime(df["date"])
+    # -------------------------------------------------------------------------
+    # Convert date column
+    # -------------------------------------------------------------------------
+
+    df["date"] = pd.to_datetime(
+        df["date"]
+    )
+
+    # -------------------------------------------------------------------------
+    # Sort data
+    # -------------------------------------------------------------------------
 
     df = df.sort_values(
-        ["store", "product", "date"]
-    ).reset_index(drop=True)
+        [
+            "store",
+            "product",
+            "date",
+        ]
+    ).reset_index(
+        drop=True
+    )
 
     return df
 
 
-# ─── Script Entry Point ───────────────────────────────────────────────────────
+# =============================================================================
+# MAIN
+# =============================================================================
 
 if __name__ == "__main__":
 
-    print("Generating synthetic Indian retail dataset...")
+    print("=" * 70)
+    print("Generating synthetic retail supply-chain dataset")
+    print("=" * 70)
 
     df = generate()
 
-    # Create data directory if it doesn't exist.
+    # -------------------------------------------------------------------------
+    # Create data directory
+    # -------------------------------------------------------------------------
+
     output_dir = os.path.join(
         os.path.dirname(__file__),
         "..",
         "data",
     )
 
-    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(
+        output_dir,
+        exist_ok=True,
+    )
+
+    # -------------------------------------------------------------------------
+    # Save dataset
+    # -------------------------------------------------------------------------
 
     output_path = os.path.join(
         output_dir,
@@ -436,13 +729,56 @@ if __name__ == "__main__":
         index=False,
     )
 
+    # -------------------------------------------------------------------------
+    # Summary
+    # -------------------------------------------------------------------------
+
     print()
     print("Dataset generated successfully!")
-    print(f"Saved to: {output_path}")
-    print(f"Shape: {df.shape}")
     print()
+    print(f"Output file : {output_path}")
+    print(f"Rows        : {len(df):,}")
+    print(f"Columns     : {len(df.columns)}")
+    print()
+
+    print("Date range:")
+    print(
+        f"{df['date'].min().date()} "
+        f"to "
+        f"{df['date'].max().date()}"
+    )
+
+    print()
+
+    print("Stores:")
+    print(df["store"].nunique())
+
+    print()
+
+    print("Products:")
+    print(df["product"].nunique())
+
+    print()
+
+    print("Suppliers:")
+    print(df["supplier"].nunique())
+
+    print()
+
     print("Columns:")
-    print(df.columns.tolist())
+    for column in df.columns:
+        print(f" - {column}")
+
     print()
-    print("Sample:")
-    print(df.head())
+
+    print("First 5 rows:")
+    print(
+        df.head().to_string(
+            index=False
+        )
+    )
+
+    print()
+    print("=" * 70)
+    print("Dataset generation complete")
+    print("=" * 70)
