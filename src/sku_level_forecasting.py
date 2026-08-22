@@ -44,8 +44,6 @@ def main():
     if missing:
         raise ValueError(f"Dataset is missing required columns: {sorted(missing)}")
 
-    # One observation per store/product/day. The source dataset uses closing_stock,
-    # not stock_level; inventory state is intentionally handled downstream.
     daily = raw.groupby(["store", "product", "category", "date"], as_index=False).agg(
         demand=("demand", "sum"), promo_event=("promo_event", "sum"),
         discount_pct=("discount_pct", "mean"), unit_price=("unit_price", "mean")
@@ -97,7 +95,7 @@ def main():
                 "lag_1": demand_series.iloc[-1], "lag_7": demand_series.iloc[-7],
                 "lag_14": demand_series.iloc[-14], "lag_30": demand_series.iloc[-30],
                 "rolling_mean_7": demand_series.tail(7).mean(), "rolling_mean_30": demand_series.tail(30).mean(),
-                "rolling_std_7": demand_series.tail(30).std(), "day_of_week": date.dayofweek,
+                "rolling_std_7": demand_series.tail(7).std(), "day_of_week": date.dayofweek,
                 "month": date.month, "day_of_month": date.day, "is_weekend": int(date.dayofweek >= 5)
             }
             prediction = float(max(model.predict(pd.DataFrame([row])[FEATURES])[0], 0))
@@ -108,8 +106,6 @@ def main():
     if forecast_df.empty:
         raise ValueError("No SKU/store forecasts were generated.")
     forecast_df.to_csv(FORECAST_PATH, index=False)
-    # Compatibility output for legacy scripts while keeping SKU-level rows.
-    forecast_df.to_csv("data/30_day_xgboost_forecast.csv", index=False)
     print(results.to_string(index=False))
     print(f"Saved: {RESULTS_PATH}")
     print(f"Saved: {FORECAST_PATH}")
