@@ -1,11 +1,19 @@
-"""Streamlit control tower for demand, inventory and supplier risk."""
+"""Executive Streamlit dashboard for the supply-chain control tower."""
 
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="Supply Chain Control Tower", layout="wide")
-st.title("Intelligent Supply Chain Control Tower")
-st.caption("SKU/store demand forecasting • Inventory health • Supplier risk • Action priorities")
+st.set_page_config(page_title="Supply Chain Control Tower", page_icon="📦", layout="wide")
+
+st.markdown("""
+<style>
+.block-container {padding-top: 2rem; padding-bottom: 2rem;}
+[data-testid="stMetricValue"] {font-size: 2rem;}
+</style>
+""", unsafe_allow_html=True)
+
+st.title("📦 Intelligent Supply Chain Control Tower")
+st.caption("Demand forecasting • Inventory optimization • Supplier risk • Business impact")
 
 @st.cache_data
 def load_csv(path):
@@ -17,36 +25,100 @@ def load_csv(path):
 control = load_csv("data/control_tower_inventory.csv")
 forecast = load_csv("data/sku_30_day_forecast.csv")
 risk = load_csv("data/supplier_risk_analysis.csv")
+impact = load_csv("data/business_impact.csv")
 
 if control.empty:
     st.warning("Run `python src/run_pipeline.py` first to generate the control-tower outputs.")
-else:
-    priority = control.get("priority", pd.Series(dtype=str)).astype(str)
-    cols = st.columns(4)
-    cols[0].metric("Store × SKU pairs", f"{len(control):,}")
-    cols[1].metric("Urgent", int((priority == "URGENT").sum()))
-    cols[2].metric("Critical", int((control.get("inventory_status", pd.Series(dtype=str)).astype(str) == "CRITICAL").sum()))
-    cols[3].metric("High Supplier Risk", int((control.get("risk_level", pd.Series(dtype=str)).astype(str) == "HIGH").sum()))
+    st.stop()
 
-    tab1, tab2, tab3 = st.tabs(["Control Tower", "SKU Forecast", "Supplier Risk"])
-    with tab1:
-        st.subheader("Priority actions")
-        st.dataframe(control, use_container_width=True, hide_index=True)
-    with tab2:
-        st.subheader("30-day SKU/store forecasts")
-        if forecast.empty:
-            st.info("No SKU forecast output found.")
-        else:
-            pairs = forecast[["store", "product"]].drop_duplicates()
-            selected = st.selectbox("Store × Product", [f"{r.store} | {r.product}" for r in pairs.itertuples()])
-            store, product = selected.split(" | ", 1)
-            view = forecast[(forecast.store == store) & (forecast.product == product)].copy()
-            view["date"] = pd.to_datetime(view["date"])
-            st.line_chart(view.set_index("date")["forecast_demand"])
-            st.dataframe(view, use_container_width=True, hide_index=True)
-    with tab3:
-        st.subheader("Supplier risk")
-        if risk.empty:
-            st.info("No supplier risk output found.")
-        else:
-            st.dataframe(risk, use_container_width=True, hide_index=True)
+priority = control.get("priority", pd.Series(dtype=str)).astype(str)
+inventory_status = control.get("inventory_status", pd.Series(dtype=str)).astype(str)
+risk_level = control.get("risk_level", pd.Series(dtype=str)).astype(str)
+
+# Executive KPIs
+kpi = st.columns(6)
+kpi[0].metric("Store × SKU", f"{len(control):,}")
+kpi[1].metric("High Priority", int((priority.isin(["HIGH", "URGENT"])).sum()))
+kpi[2].metric("Critical", int((inventory_status == "CRITICAL").sum()))
+kpi[3].metric("Reorder", int((inventory_status == "REORDER").sum()))
+kpi[4].metric("Supplier Risk", int((risk_level == "HIGH").sum()))
+if not impact.empty:
+    pct = impact.iloc[0].get("stockout_risk_pct", 0)
+    kpi[5].metric("Stockout Risk", f"{float(pct):.1f}%")
+else:
+    kpi[5].metric("Stockout Risk", "—")
+
+st.divider()
+
+tab1, tab2, tab3, tab4 = st.tabs(["🚨 Control Tower", "📈 SKU Forecast", "🏭 Supplier Risk", "💰 Business Impact"])
+
+with tab1:
+    st.subheader("Priority actions")
+    c1, c2 = st.columns(2)
+    with c1:
+        store_options = ["All stores"] + sorted(control["store"].dropna().unique().tolist())
+        store_filter = st.selectbox("Store", store_options)
+    with c2:
+        priority_options = ["All priorities"] + ["URGENT", "HIGH", "MEDIUM", "LOW"]
+        priority_filter = st.selectbox("Priority", priority_options)
+
+    view = control.copy()
+    if store_filter != "All stores":
+        view = view[view.store == store_filter]
+    if priority_filter != "All priorities":
+        view = view[view.priority == priority_filter]
+
+    preferred = [
+        "priority", "action", "store", "product", "category", "supplier",
+        "inventory_status", "days_of_stock", "shortage_to_rop",
+        "recommended_order_qty", "average_30_day_forecast", "risk_level"
+    ]
+    display_cols = [c for c in preferred if c in view.columns]
+    st.dataframe(view[display_cols], use_container_width=True, hide_index=True)
+
+with tab2:
+    st.subheader("30-day SKU/store demand forecast")
+    if forecast.empty:
+        st.info("No SKU forecast output found.")
+    else:
+        pairs = forecast[["store", "product"]].drop_duplicates().sort_values(["store", "product"])
+        selected = st.selectbox("Store × Product", [f"{r.store} | {r.product}" for r in pairs.itertuples()])
+        store, product = selected.split(" | ", 1)
+        view = forecast[(forecast.store == store) & (forecast.product == product)].copy()
+        view["date"] = pd.to_datetime(view["date"])
+        chart = view.set_index("date")[["forecast_demand"]]
+        st.line_chart(chart, height=360)
+        total = view["forecast_demand"].sum()
+        avg = view["forecast_demand"].mean()
+        a, b = st.columns(2)
+        a.metric("30-day forecast", f"{total:,.0f} units")
+        b.metric("Average daily demand", f"{avg:,.1f} units")
+        st.dataframe(view, use_container_width=True, hide_index=True)
+
+with tab3:
+    st.subheader("Supplier risk overview")
+    if risk.empty:
+        st.info("No supplier risk output found.")
+    else:
+        r1, r2, r3 = st.columns(3)
+        r1.metric("Low", int((risk_level == "LOW").sum()))
+        r2.metric("Medium", int((risk_level == "MEDIUM").sum()))
+        r3.metric("High", int((risk_level == "HIGH").sum()))
+        st.bar_chart(risk["risk_level"].value_counts().reindex(["LOW", "MEDIUM", "HIGH"], fill_value=0))
+        st.dataframe(risk, use_container_width=True, hide_index=True)
+
+with tab4:
+    st.subheader("Business impact")
+    if impact.empty:
+        st.info("No business impact output found.")
+    else:
+        row = impact.iloc[0]
+        b1, b2, b3, b4 = st.columns(4)
+        b1.metric("SKU/store pairs", f"{int(row['total_sku_store_pairs']):,}")
+        b2.metric("Stockout-risk pairs", f"{int(row['stockout_risk_pairs']):,}")
+        b3.metric("Lost-sales value", f"₹{float(row['estimated_lost_sales_value']):,.0f}")
+        b4.metric("Inventory value", f"₹{float(row['current_inventory_value']):,.0f}")
+        st.dataframe(impact, use_container_width=True, hide_index=True)
+
+st.divider()
+st.caption("Decision-support dashboard powered by SKU-level XGBoost forecasting, inventory optimization and supplier-risk analytics.")
