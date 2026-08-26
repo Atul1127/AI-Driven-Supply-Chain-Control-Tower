@@ -4,7 +4,6 @@ import pandas as pd
 import streamlit as st
 
 st.set_page_config(page_title="Supply Chain Control Tower", page_icon="📦", layout="wide")
-
 st.markdown("""
 <style>
 .block-container {padding-top: 2rem; padding-bottom: 2rem;}
@@ -13,7 +12,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("📦 Intelligent Supply Chain Control Tower")
-st.caption("SKU-level forecasting • Inventory optimization • Supplier risk • Disruption intelligence • Business impact")
+st.caption("Forecasting • Inventory optimization • Supplier risk • Disruption intelligence • Business impact")
 
 @st.cache_data
 def load_csv(path):
@@ -30,6 +29,7 @@ models = load_csv("data/baseline_results.csv")
 disruption = load_csv("data/disruption_detection.csv")
 cluster_results = load_csv("data/disruption_model_comparison.csv")
 pca = load_csv("data/disruption_pca.csv")
+temporal = load_csv("data/temporal_disruption.csv")
 
 if control.empty:
     st.warning("Run `python src/run_pipeline.py` first to generate the control-tower outputs.")
@@ -42,14 +42,10 @@ risk_level = risk.get("risk_level", pd.Series(dtype=str)).astype(str) if not ris
 kpi = st.columns(6)
 kpi[0].metric("Store × SKU", f"{len(control):,}")
 kpi[1].metric("High Priority", int(priority.isin(["HIGH", "URGENT"]).sum()))
-kpi[2].metric("Critical", int((inventory_status == "CRITICAL").sum()))
+kpi[2].metric("Critical Inventory", int((inventory_status == "CRITICAL").sum()))
 kpi[3].metric("Reorder", int((inventory_status == "REORDER").sum()))
 kpi[4].metric("Supplier Risk", int((risk_level == "HIGH").sum()))
-if not impact.empty:
-    row = impact.iloc[0]
-    kpi[5].metric("Current Stockouts", f"{int(row.get('current_stockout_pairs', 0)):,}")
-else:
-    kpi[5].metric("Current Stockouts", "—")
+kpi[5].metric("Disruptions", int((disruption.get("disruption_level", pd.Series(dtype=str)) == "CRITICAL").sum()) if not disruption.empty else 0)
 
 st.divider()
 tabs = st.tabs(["🚨 Control Tower", "⚠️ Disruption Intelligence", "📈 SKU Forecast", "📊 Model Benchmark", "🏭 Supplier Risk", "💰 Business Impact"])
@@ -84,11 +80,10 @@ with tabs[1]:
         d3.metric("Anomalies", anomalies)
         d4.metric("Suppliers", len(disruption))
 
-        st.divider()
         left, right = st.columns(2)
         with left:
-            st.markdown("**Disruption level distribution**")
             levels = disruption["disruption_level"].value_counts().reindex(["LOW", "MEDIUM", "HIGH", "CRITICAL"], fill_value=0)
+            st.markdown("**Disruption level distribution**")
             st.bar_chart(levels)
         with right:
             st.markdown("**Anomaly score distribution**")
@@ -100,7 +95,7 @@ with tabs[1]:
 
         st.markdown("### Supplier drill-down")
         supplier_names = disruption["supplier"].dropna().astype(str).tolist()
-        selected_supplier = st.selectbox("Supplier", supplier_names)
+        selected_supplier = st.selectbox("Supplier", supplier_names, key="disruption_supplier")
         selected = disruption[disruption["supplier"].astype(str) == selected_supplier].iloc[0]
         a, b, c, d = st.columns(4)
         a.metric("Disruption score", f"{selected['disruption_score']:.1f}")
@@ -109,14 +104,45 @@ with tabs[1]:
         d.metric("Fill rate", f"{selected['fill_percentage']:.1f}%")
         st.info(f"Cluster **{selected['cluster']}** • Status **{selected['disruption_level']}** • Anomaly **{selected['anomaly_status']}**")
 
+        if not temporal.empty:
+            st.markdown("### Temporal disruption timeline")
+            supplier_temporal = temporal[temporal["supplier"].astype(str) == selected_supplier].copy()
+            products = sorted(supplier_temporal["product"].dropna().astype(str).unique())
+            if products:
+                selected_product = st.selectbox("Affected SKU / Product", products, key="timeline_product")
+                timeline = supplier_temporal[supplier_temporal["product"].astype(str) == selected_product].copy()
+                timeline["date"] = pd.to_datetime(timeline["date"])
+                timeline = timeline.sort_values("date")
+                st.line_chart(timeline.set_index("date")[["disruption_signal"]], height=280)
+                recent = timeline.tail(1).iloc[0]
+                st.metric("Current temporal stage", str(recent["disruption_stage"]))
+                st.caption(f"Signal is measured against the preceding 14-day operational baseline for {selected_supplier} / {selected_product}.")
+
+        st.markdown("### Why is this supplier risky?")
+        reasons = []
+        if selected["average_lead_time"] > disruption["average_lead_time"].median(): reasons.append("Lead time is above the supplier population median.")
+        if selected["fill_percentage"] < disruption["fill_percentage"].median(): reasons.append("Fill rate is below the supplier population median.")
+        if selected["on_time_percentage"] < disruption["on_time_percentage"].median(): reasons.append("On-time delivery is below the supplier population median.")
+        if selected["defect_percentage"] > disruption["defect_percentage"].median(): reasons.append("Defect rate is above the supplier population median.")
+        if selected["anomaly_status"] == "ANOMALY": reasons.append("Isolation Forest identifies unusual multivariate operating behavior.")
+        for reason in reasons or ["No single dominant driver; review the complete supplier profile."]:
+            st.write(f"• {reason}")
+
+        st.markdown("### Recommended response")
+        level = str(selected["disruption_level"])
+        if level == "CRITICAL":
+            st.error("Activate alternate sourcing, expedite open orders, protect high-demand inventory, and review affected SKUs immediately.")
+        elif level == "HIGH":
+            st.warning("Review supplier capacity, increase monitoring frequency, and evaluate safety-stock or alternate-source actions.")
+        else:
+            st.info("Continue monitoring and investigate persistent deterioration before escalating.")
+
         st.markdown("### PCA supply-chain behavior map")
         if not pca.empty:
             chart = pca[["pc1", "pc2", "cluster"]].copy()
             chart["cluster"] = chart["cluster"].astype(str)
             st.scatter_chart(chart, x="pc1", y="pc2", color="cluster", height=420)
-            pc1 = float(pca["explained_variance_pc1"].iloc[0]) * 100
-            pc2 = float(pca["explained_variance_pc2"].iloc[0]) * 100
-            st.caption(f"PCA explained variance: PC1 {pc1:.1f}% • PC2 {pc2:.1f}%")
+            st.caption(f"PCA explained variance: PC1 {pca['explained_variance_pc1'].iloc[0] * 100:.1f}% • PC2 {pca['explained_variance_pc2'].iloc[0] * 100:.1f}%")
 
         st.markdown("### Clustering model comparison")
         if not cluster_results.empty:
@@ -129,7 +155,7 @@ with tabs[2]:
         st.info("No SKU forecast output found.")
     else:
         pairs = forecast[["store", "product"]].drop_duplicates().sort_values(["store", "product"])
-        selected = st.selectbox("Store × Product", [f"{r.store} | {r.product}" for r in pairs.itertuples()])
+        selected = st.selectbox("Store × Product", [f"{r.store} | {r.product}" for r in pairs.itertuples()], key="forecast_pair")
         store, product = selected.split(" | ", 1)
         view = forecast[(forecast.store == store) & (forecast.product == product)].copy()
         view["date"] = pd.to_datetime(view["date"])
@@ -144,7 +170,7 @@ with tabs[3]:
     if models.empty:
         st.info("No model benchmark output found. Run the pipeline first.")
     else:
-        metric = st.selectbox("Metric", ["MAE", "RMSE", "MAPE"])
+        metric = st.selectbox("Metric", ["MAE", "RMSE", "MAPE"], key="forecast_metric")
         chart = models[["model", metric]].set_index("model").sort_values(metric)
         st.bar_chart(chart, height=320)
         st.dataframe(models, use_container_width=True, hide_index=True)
