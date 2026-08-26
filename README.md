@@ -1,4 +1,4 @@
-# Intelligent Demand & Supply Chain Control Tower
+# AI-Driven Supply Chain Control Tower
 
 ### SKU-level Demand Forecasting • Inventory Optimization • Supplier Risk • Control Tower
 
@@ -234,8 +234,8 @@ Generated CSV outputs are intentionally **not committed**. They are recreated by
 ## Installation
 
 ```bash
-git clone https://github.com/Atul1127/Intelligent-Demand-Supply-Chain-Control-Tower-Our-Architecture.git
-cd Intelligent-Demand-Supply-Chain-Control-Tower-Our-Architecture
+git clone https://github.com/Atul1127/AI-Driven-Supply-Chain-Control-Tower.git
+cd AI-Driven-Supply-Chain-Control-Tower
 python -m venv .venv
 ```
 
