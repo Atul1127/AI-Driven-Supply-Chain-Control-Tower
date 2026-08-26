@@ -13,7 +13,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("📦 Intelligent Supply Chain Control Tower")
-st.caption("SKU-level demand forecasting • Inventory optimization • Supplier risk • Business impact")
+st.caption("SKU-level forecasting • Inventory optimization • Supplier risk • Disruption intelligence • Business impact")
 
 @st.cache_data
 def load_csv(path):
@@ -27,6 +27,9 @@ forecast = load_csv("data/sku_30_day_forecast.csv")
 risk = load_csv("data/supplier_risk_analysis.csv")
 impact = load_csv("data/business_impact.csv")
 models = load_csv("data/baseline_results.csv")
+disruption = load_csv("data/disruption_detection.csv")
+cluster_results = load_csv("data/disruption_model_comparison.csv")
+pca = load_csv("data/disruption_pca.csv")
 
 if control.empty:
     st.warning("Run `python src/run_pipeline.py` first to generate the control-tower outputs.")
@@ -34,7 +37,7 @@ if control.empty:
 
 priority = control.get("priority", pd.Series(dtype=str)).astype(str)
 inventory_status = control.get("inventory_status", pd.Series(dtype=str)).astype(str)
-risk_level = control.get("risk_level", pd.Series(dtype=str)).astype(str)
+risk_level = risk.get("risk_level", pd.Series(dtype=str)).astype(str) if not risk.empty else pd.Series(dtype=str)
 
 kpi = st.columns(6)
 kpi[0].metric("Store × SKU", f"{len(control):,}")
@@ -49,9 +52,9 @@ else:
     kpi[5].metric("Current Stockouts", "—")
 
 st.divider()
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["🚨 Control Tower", "📈 SKU Forecast", "📊 Model Benchmark", "🏭 Supplier Risk", "💰 Business Impact"])
+tabs = st.tabs(["🚨 Control Tower", "⚠️ Disruption Intelligence", "📈 SKU Forecast", "📊 Model Benchmark", "🏭 Supplier Risk", "💰 Business Impact"])
 
-with tab1:
+with tabs[0]:
     st.subheader("Priority actions")
     c1, c2 = st.columns(2)
     with c1:
@@ -59,18 +62,68 @@ with tab1:
         store_filter = st.selectbox("Store", store_options)
     with c2:
         priority_filter = st.selectbox("Priority", ["All priorities", "URGENT", "HIGH", "MEDIUM", "LOW"])
-
     view = control.copy()
     if store_filter != "All stores":
         view = view[view.store == store_filter]
     if priority_filter != "All priorities":
         view = view[view.priority == priority_filter]
-
     preferred = ["priority", "action", "store", "product", "category", "supplier", "inventory_status", "days_of_stock", "shortage_to_rop", "recommended_order_qty", "average_30_day_forecast", "risk_level"]
-    display_cols = [c for c in preferred if c in view.columns]
-    st.dataframe(view[display_cols], use_container_width=True, hide_index=True)
+    st.dataframe(view[[c for c in preferred if c in view.columns]], use_container_width=True, hide_index=True)
 
-with tab2:
+with tabs[1]:
+    st.subheader("Supply-chain disruption intelligence")
+    if disruption.empty:
+        st.info("No disruption output found. Run `python src/run_pipeline.py` first.")
+    else:
+        critical = int((disruption["disruption_level"] == "CRITICAL").sum())
+        high = int((disruption["disruption_level"] == "HIGH").sum())
+        anomalies = int((disruption["anomaly_status"] == "ANOMALY").sum())
+        d1, d2, d3, d4 = st.columns(4)
+        d1.metric("Critical", critical)
+        d2.metric("High", high)
+        d3.metric("Anomalies", anomalies)
+        d4.metric("Suppliers", len(disruption))
+
+        st.divider()
+        left, right = st.columns(2)
+        with left:
+            st.markdown("**Disruption level distribution**")
+            levels = disruption["disruption_level"].value_counts().reindex(["LOW", "MEDIUM", "HIGH", "CRITICAL"], fill_value=0)
+            st.bar_chart(levels)
+        with right:
+            st.markdown("**Anomaly score distribution**")
+            st.bar_chart(disruption["anomaly_score"].value_counts(bins=10, sort=False))
+
+        st.markdown("### Highest-priority disruption candidates")
+        cols = ["supplier", "disruption_level", "disruption_score", "anomaly_status", "anomaly_score", "cluster", "average_lead_time", "on_time_percentage", "fill_percentage", "defect_percentage"]
+        st.dataframe(disruption[[c for c in cols if c in disruption.columns]].head(20), use_container_width=True, hide_index=True)
+
+        st.markdown("### Supplier drill-down")
+        supplier_names = disruption["supplier"].dropna().astype(str).tolist()
+        selected_supplier = st.selectbox("Supplier", supplier_names)
+        selected = disruption[disruption["supplier"].astype(str) == selected_supplier].iloc[0]
+        a, b, c, d = st.columns(4)
+        a.metric("Disruption score", f"{selected['disruption_score']:.1f}")
+        b.metric("Anomaly score", f"{selected['anomaly_score']:.3f}")
+        c.metric("Lead time", f"{selected['average_lead_time']:.1f} days")
+        d.metric("Fill rate", f"{selected['fill_percentage']:.1f}%")
+        st.info(f"Cluster **{selected['cluster']}** • Status **{selected['disruption_level']}** • Anomaly **{selected['anomaly_status']}**")
+
+        st.markdown("### PCA supply-chain behavior map")
+        if not pca.empty:
+            chart = pca[["pc1", "pc2", "cluster"]].copy()
+            chart["cluster"] = chart["cluster"].astype(str)
+            st.scatter_chart(chart, x="pc1", y="pc2", color="cluster", height=420)
+            pc1 = float(pca["explained_variance_pc1"].iloc[0]) * 100
+            pc2 = float(pca["explained_variance_pc2"].iloc[0]) * 100
+            st.caption(f"PCA explained variance: PC1 {pc1:.1f}% • PC2 {pc2:.1f}%")
+
+        st.markdown("### Clustering model comparison")
+        if not cluster_results.empty:
+            metric_cols = ["model", "parameters", "clusters", "noise_pct", "silhouette", "davies_bouldin", "calinski_harabasz"]
+            st.dataframe(cluster_results[[c for c in metric_cols if c in cluster_results.columns]].sort_values("silhouette", ascending=False), use_container_width=True, hide_index=True)
+
+with tabs[2]:
     st.subheader("30-day SKU/store demand forecast")
     if forecast.empty:
         st.info("No SKU forecast output found.")
@@ -86,9 +139,8 @@ with tab2:
         b.metric("Average daily demand", f"{view.forecast_demand.mean():,.1f} units")
         st.dataframe(view, use_container_width=True, hide_index=True)
 
-with tab3:
+with tabs[3]:
     st.subheader("Store × SKU forecasting benchmark")
-    st.caption("Same chronological test window across naive, seasonal-naive and XGBoost models.")
     if models.empty:
         st.info("No model benchmark output found. Run the pipeline first.")
     else:
@@ -99,7 +151,7 @@ with tab3:
         best = models.loc[models[metric].idxmin()]
         st.success(f"Best {metric}: **{best['model']}** ({best[metric]:.2f})")
 
-with tab4:
+with tabs[4]:
     st.subheader("Supplier risk overview")
     if risk.empty:
         st.info("No supplier risk output found.")
@@ -112,7 +164,7 @@ with tab4:
         st.bar_chart(distribution)
         st.dataframe(risk, use_container_width=True, hide_index=True)
 
-with tab5:
+with tabs[5]:
     st.subheader("Business impact")
     if impact.empty:
         st.info("No business impact output found.")
@@ -127,4 +179,4 @@ with tab5:
         st.dataframe(impact, use_container_width=True, hide_index=True)
 
 st.divider()
-st.caption("Decision-support dashboard powered by SKU-level XGBoost forecasting, inventory optimization and supplier-risk analytics.")
+st.caption("Decision-support dashboard powered by forecasting, inventory optimization, supplier-risk analytics and unsupervised disruption detection.")
