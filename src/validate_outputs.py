@@ -1,4 +1,4 @@
-"""Lightweight post-run validation for generated control-tower artifacts."""
+"""Post-run validation for generated control-tower artifacts."""
 
 from pathlib import Path
 import pandas as pd
@@ -11,6 +11,9 @@ REQUIRED = {
     "sku_30_day_forecast.csv": ["date", "store", "product", "forecast_demand"],
     "inventory_optimization_results.csv": ["store", "product", "inventory_status"],
     "supplier_risk_analysis.csv": ["supplier", "risk_score", "risk_level"],
+    "disruption_detection.csv": ["supplier", "cluster", "anomaly_status", "anomaly_score", "disruption_score", "disruption_level"],
+    "disruption_model_comparison.csv": ["model", "parameters", "silhouette", "davies_bouldin", "calinski_harabasz"],
+    "disruption_pca.csv": ["supplier", "cluster", "pc1", "pc2"],
     "control_tower_inventory.csv": ["store", "product", "priority", "action"],
     "business_impact.csv": ["total_sku_store_pairs", "current_stockout_pairs", "historical_lost_sales_value"],
     "sku_xgboost_shap_importance.csv": ["feature", "mean_abs_shap"],
@@ -48,6 +51,12 @@ def main():
         if forecast_pairs != pairs:
             errors.append(f"Forecast covers {forecast_pairs} store/SKU pairs; model reports {pairs}")
 
+        disruption = frames["disruption_detection.csv"]
+        if not disruption["disruption_score"].between(0, 100).all():
+            errors.append("Disruption score must be between 0 and 100")
+        if not disruption["anomaly_status"].isin(["NORMAL", "ANOMALY"]).all():
+            errors.append("Unexpected anomaly status")
+
     if errors:
         print("OUTPUT VALIDATION FAILED")
         for error in errors:
@@ -58,6 +67,7 @@ def main():
     print("- Required output files and schemas are present")
     print("- XGBoost beats the seasonal-naive baseline on MAE/RMSE/MAPE")
     print("- Forecast coverage matches the 150 store/SKU pairs")
+    print("- Disruption detection outputs and score ranges are valid")
 
 
 if __name__ == "__main__":
