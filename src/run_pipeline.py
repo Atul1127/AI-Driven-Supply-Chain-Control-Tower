@@ -8,6 +8,7 @@ STEPS = [
     "src/sku_level_forecasting.py",
     "src/inventory_optimization.py",
     "src/supplier_risk.py",
+    "src/disruption_detection.py",
     "src/create_control_tower.py",
     "src/business_impact.py",
     "src/shap_explainability.py",
