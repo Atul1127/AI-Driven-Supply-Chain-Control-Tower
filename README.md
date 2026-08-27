@@ -1,110 +1,127 @@
 # AI-Driven Supply Chain Control Tower
 
-### SKU-level Demand Forecasting • Inventory Optimization • Supplier Risk • Disruption Detection • Control Tower
+**Demand Forecasting · Inventory Optimization · Supplier Risk · Disruption Detection · Decision Dashboard**
 
-An end-to-end retail supply-chain decision system that connects **store/SKU demand forecasting, inventory optimization, supplier risk, unsupervised disruption detection, temporal monitoring, explainability, and operational priorities**.
+An end-to-end supply-chain analytics and machine-learning project that turns store/SKU demand and supplier operations into **forecasts, replenishment decisions, risk signals, disruption alerts, and an interactive control tower**.
 
-> **Business question:** What will each store/SKU need, which inventory positions require action, and are any suppliers or supplier/SKU relationships showing early signs of disruption?
+> **Portfolio note:** the dataset is synthetic. The project is designed to demonstrate an end-to-end ML/analytics workflow and does not claim production deployment or real-world disruption ground truth.
 
-## Architecture
-
-```text
-Synthetic Retail Data
-        │
-        ├── PostgreSQL + SQL Analytics
-        │
-        ▼
- Store × SKU Daily Demand
-        │
-        ├── Naive baselines
-        └── XGBoost forecasting
-                │
-                ▼
-        30-Day SKU Forecast
-                │
-                ├──────────────► SHAP Explainability
-                ▼
-        Inventory Optimization
-                │
-        ┌───────┴────────┐
-        ▼                ▼
- Supplier Risk    Disruption Intelligence
-                         │
-             ┌───────────┼───────────┐
-             ▼           ▼           ▼
-          K-Means   Hierarchical   DBSCAN
-             └───────────┼───────────┘
-                         ▼
-                        PCA
-                         │
-                         ▼
-                 Isolation Forest
-                         │
-                         ▼
-                Temporal Monitoring
-                         │
-                         ▼
-                  Impact / Actions
-                         │
-                         ▼
-                Executive Control Tower
-                         │
-                         ▼
-                  Streamlit Dashboard
-```
-
-## What is implemented
-
-1. Reproducible synthetic retail data covering **2023–2024**, 5 stores, 30 products, 8 suppliers, and 109,650 daily records.
-2. Store × product demand aggregation with leakage-safe lag and rolling features.
-3. Comparable **1-day naive and 7-day seasonal-naive baselines**.
-4. **XGBoost** SKU/store forecasting with chronological evaluation.
-5. 30-day recursive forecasts for every eligible store/SKU pair.
-6. Forecast-driven **Safety Stock, Reorder Point, EOQ, and replenishment recommendations**.
-7. Supplier risk scoring from delivery reliability, defects, delays, and fill rate.
-8. **K-Means, hierarchical clustering, and DBSCAN** for supplier operating-regime discovery.
-9. **PCA** for lower-dimensional supply-chain behavior visualization.
-10. **Isolation Forest** for multivariate supplier anomaly detection.
-11. A transparent **Disruption Score** and LOW/MEDIUM/HIGH/CRITICAL alert levels.
-12. **Temporal supplier × SKU monitoring** against rolling 14-day operational baselines.
-13. Disruption drill-down with anomaly drivers, temporal signal, PCA map, and response guidance.
-14. Historical/current business impact metrics and operational control-tower priorities.
-15. SHAP feature importance aligned with the same SKU-level XGBoost feature set.
-16. Streamlit dashboard for operational filtering, forecasting, model benchmarking, supplier risk, disruption intelligence, and business impact.
-17. Deterministic `src/run_pipeline.py` entry point with post-run output validation.
-
-## Disruption Detection
-
-The disruption module operates at supplier level using operational features such as:
+## What the system does
 
 ```text
-Average lead time
-Lead-time variability
-On-time delivery
-Defect rate
-Fill rate
-Supplier delay rate
-Demand level / volatility
-Stockout rate
+Retail Supply-Chain Data
+          │
+          ├── SQL / EDA
+          │
+          ▼
+     Store × SKU Demand
+          │
+          ├── Naive baselines
+          └── XGBoost forecasting
+                  │
+                  ▼
+          30-Day Demand Forecast
+                  │
+          ┌───────┴────────┐
+          ▼                ▼
+ Inventory Optimization  SHAP
+          │
+          ▼
+ Safety Stock / ROP / EOQ
+          │
+          ├─────────────────────┐
+          ▼                     ▼
+ Supplier Risk        Disruption Intelligence
+                                │
+                   ┌────────────┼────────────┐
+                   ▼            ▼            ▼
+                K-Means   Hierarchical    DBSCAN
+                   └────────────┼────────────┘
+                                ▼
+                               PCA
+                                │
+                                ▼
+                       Isolation Forest
+                                │
+                                ▼
+                    Temporal Supplier × SKU
+                         Monitoring
+                                │
+                                ▼
+                     Disruption Prioritization
+                                │
+                                ▼
+                      Business Impact Signals
+                                │
+                                ▼
+                       Streamlit Control Tower
 ```
 
-Three clustering families are compared:
+## Key capabilities
 
-- **K-Means** — compact operating regimes
-- **Hierarchical clustering** — interpretable supplier similarity structure
-- **DBSCAN** — density-based regimes and noise points
+### 1. Demand forecasting
 
-Clustering quality is evaluated with:
+- Store × SKU daily demand aggregation
+- Leakage-safe lag and rolling features
+- 1-day naive baseline
+- 7-day seasonal-naive baseline
+- XGBoost forecasting
+- Chronological evaluation
+- 30-day recursive forecasts
+- MAE, RMSE and MAPE comparison
+
+### 2. Inventory optimization
+
+Forecasts are converted into operational inventory signals:
+
+```text
+Forecast Demand
+      ↓
+Lead-Time Demand
+      ↓
+Safety Stock
+      ↓
+Reorder Point
+      ↓
+EOQ
+      ↓
+Recommended Replenishment
+```
+
+### 3. Supplier risk
+
+Supplier profiles use operational measures including:
+
+- on-time delivery
+- lead time
+- defects
+- delays
+- ordered vs received quantity
+- fill rate
+
+### 4. Unsupervised disruption intelligence
+
+Supplier behavior is segmented with three clustering approaches:
+
+| Method | Purpose |
+|---|---|
+| **K-Means** | Identify compact supplier operating regimes |
+| **Hierarchical clustering** | Explore supplier similarity structure |
+| **DBSCAN** | Find density-based groups and unusual/noise points |
+| **PCA** | Visualize high-dimensional supplier behavior |
+| **Isolation Forest** | Detect unusual multivariate supplier behavior |
+
+Clustering configurations are compared using:
 
 - Silhouette score
 - Davies-Bouldin index
 - Calinski-Harabasz score
 
-Isolation Forest then detects suppliers with unusual multivariate behavior.
+### 5. Temporal disruption monitoring
 
-### Temporal disruption detection
+`src/temporal_disruption.py` monitors **supplier × product** behavior against a preceding 14-day operational baseline.
 
-`src/temporal_disruption.py` builds daily supplier × product signals and compares current behavior with a preceding 14-day rolling baseline. It monitors:
+Signals include:
 
 - lead-time deterioration
 - fill-rate deterioration
@@ -112,27 +129,33 @@ Isolation Forest then detects suppliers with unusual multivariate behavior.
 - defect-rate deterioration
 - stockout deterioration
 
-Signals are classified as:
+The operational signal is classified as:
 
 ```text
 NORMAL → EARLY_WARNING → EMERGING → CRITICAL
 ```
 
-This distinguishes a supplier that is generally unusual from a supplier whose behavior is **actively deteriorating**.
+This complements the cross-sectional supplier anomaly model: a supplier can be unusual compared with peers, or it can be actively deteriorating compared with its own recent behavior.
 
-### Operational response
+### 6. Disruption prioritization
 
-The dashboard combines disruption severity with operational context and provides response guidance such as:
+The project combines multivariate anomaly severity with operational KPI deviations into a transparent **Disruption Priority Score**.
 
-- activate alternate sourcing
-- expedite open orders
-- protect high-demand inventory
-- increase monitoring
-- review safety-stock coverage
+The score is a decision-support ranking, **not a calibrated probability of disruption**.
 
-These are decision-support recommendations, not autonomous procurement decisions.
+### 7. Operational explanations
 
-## Streamlit Control Tower
+The dashboard highlights potential drivers such as:
+
+- elevated lead time
+- below-median fill rate
+- below-median on-time delivery
+- above-median defect rate
+- unusual multivariate behavior
+
+Recommendations are deliberately presented as **decision support requiring human review**, not autonomous procurement decisions.
+
+## Streamlit dashboard
 
 Run:
 
@@ -140,16 +163,52 @@ Run:
 streamlit run app.py
 ```
 
-Dashboard sections:
+### 🚨 Control Tower
 
-- 🚨 Control Tower — filters and prioritized actions
-- ⚠️ Disruption Intelligence — anomaly ranking, temporal monitoring, supplier drill-down, PCA, clustering comparison
-- 📈 SKU Forecast — 30-day store/SKU forecast
-- 📊 Model Benchmark — MAE/RMSE/MAPE comparison
-- 🏭 Supplier Risk — supplier risk distribution and details
-- 💰 Business Impact — stockouts, lost sales, inventory value, replenishment
+- Store/SKU priority actions
+- Inventory status
+- Replenishment recommendations
+- Operational filtering
 
-## Repository Structure
+### ⚠️ Disruption Intelligence
+
+- Critical/high disruption counts
+- Anomaly ranking
+- Supplier drill-down
+- Temporal disruption timeline
+- Supplier/SKU selection
+- PCA behavior map
+- Clustering model comparison
+- Operational risk explanations
+- Response guidance
+
+### 📈 SKU Forecast
+
+- Store/SKU selection
+- 30-day forecast visualization
+- Forecast totals and daily averages
+
+### 📊 Model Benchmark
+
+- MAE / RMSE / MAPE comparison
+- Baseline vs XGBoost performance
+
+### 🏭 Supplier Risk
+
+- Risk distribution
+- Supplier-level risk table
+
+### 💰 Business Impact
+
+- Current stockout pairs
+- Historical stockout days
+- Historical lost-sales exposure
+- Current inventory value
+- Replenishment signals
+
+> Historical lost-sales is simulated exposure from the synthetic dataset; it is **not savings generated by the system**.
+
+## Repository structure
 
 ```text
 .
@@ -182,7 +241,7 @@ Dashboard sections:
 └── README.md
 ```
 
-Generated CSV outputs are intentionally **not committed**. They are recreated by the pipeline.
+Generated pipeline CSVs are ignored by Git; only the source retail dataset is retained in `data/` by default.
 
 ## Installation
 
@@ -192,25 +251,31 @@ cd AI-Driven-Supply-Chain-Control-Tower
 python -m venv .venv
 ```
 
-Activate the environment and install dependencies:
+### Windows Git Bash
 
 ```bash
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
+source .venv/Scripts/activate
+```
 
-# macOS / Linux
+### macOS / Linux
+
+```bash
 source .venv/bin/activate
+```
 
+Install dependencies:
+
+```bash
 pip install -r requirements.txt
 ```
 
-## Run the operational pipeline
+## Run the complete pipeline
 
 ```bash
 python src/run_pipeline.py
 ```
 
-The pipeline runs, in order:
+The reproducible pipeline executes:
 
 ```text
 1. baseline_forecasting.py
@@ -225,68 +290,67 @@ The pipeline runs, in order:
 10. validate_outputs.py
 ```
 
-The final validation checks required output schemas, non-empty artifacts, Store × SKU forecast coverage, forecasting benchmark quality, and disruption-score/anomaly output validity.
+Validation checks output schemas, non-empty artifacts, forecast coverage, baseline comparison, and disruption output ranges.
 
-Then launch the dashboard:
+Then launch:
 
 ```bash
 streamlit run app.py
 ```
 
-## Forecasting
+## Data
 
-The operational forecasting path evaluates baselines at the same **store × SKU level** and uses the same final chronological test window as XGBoost.
+The included dataset is **synthetic retail supply-chain data** generated for the project. It represents daily observations across:
 
-Metrics:
+- 5 stores
+- 30 products
+- 8 suppliers
+- 2023–2024 dates
+- 109,650 daily records
+
+The synthetic design allows the project to demonstrate supplier, inventory, demand, and disruption workflows without exposing private business data.
+
+## Evaluation
+
+### Forecasting
+
+Models are compared on a common chronological test window using:
 
 - MAE
 - RMSE
 - MAPE
 
-The repository does **not** claim XGBoost is best without comparing it against the naive baselines.
+XGBoost is not assumed to be the best model; it is compared against simple baselines.
 
-## Inventory Optimization
+### Clustering
 
-```text
-Forecast Daily Demand
-        ↓
-Lead-Time Demand
-        ↓
-Safety Stock
-        ↓
-Reorder Point
-        ↓
-EOQ
-        ↓
-Operational Cap
-        ↓
-Recommended Replenishment
-```
+Cluster structure is assessed with:
 
-## Business Impact
+- Silhouette score — higher is better
+- Davies-Bouldin index — lower is better
+- Calinski-Harabasz score — higher is better
 
-`src/business_impact.py` reports operational signals rather than incorrectly labeling low inventory coverage as stockout risk:
+### Disruption detection
 
-- current stockout pairs
-- historical stockout days
-- historical lost-sales value
-- current inventory value
-- recommended replenishment
-- critical/reorder/normal inventory counts
-- low-coverage pairs
+The disruption detector is **unsupervised/heuristic** and does not have verified historical disruption labels. Therefore the project reports anomaly scores, cluster structure, and operational deviations rather than claiming supervised precision/recall against real disruption events.
 
-> **Important:** historical lost-sales value is simulated exposure. It is not money saved by the system.
+## Limitations
 
-## Important limitations
+- Synthetic data rather than confidential production data
+- No verified historical disruption ground truth
+- Disruption priority thresholds are decision-support heuristics
+- Temporal monitoring uses a configurable rolling baseline rather than a production-calibrated change-point model
+- Inventory formulas are simplified operational models
+- No streaming/event-driven production architecture
+- No automated model retraining or drift monitoring
+- Dashboard recommendations require human review
 
-- The dataset is synthetic and intended for portfolio/learning use.
-- Disruption labels are unsupervised/heuristic signals, not verified historical disruption events.
-- The temporal detector uses rolling operational baselines and should be calibrated for production alerting.
-- Inventory formulas are simplified decision-support models, not production procurement policies.
-- Supplier risk and disruption thresholds should be calibrated for a real organization.
-- Response recommendations are decision support and require human review.
-- Forecast metrics should be interpreted alongside naive baselines rather than in isolation.
+These limitations are intentional and are documented rather than hidden.
 
 ## Technology
 
 **Python · Pandas · NumPy · Scikit-learn · XGBoost · Statsmodels · SHAP · Streamlit · PostgreSQL · SQL · Matplotlib · Seaborn**
+
+## Resume-ready project description
+
+> **AI-Driven Supply Chain Control Tower** — Built an end-to-end supply-chain ML system combining leakage-safe XGBoost demand forecasting, inventory optimization, supplier risk scoring, K-Means/Hierarchical/DBSCAN segmentation, PCA, Isolation Forest anomaly detection, and temporal supplier-SKU monitoring; integrated outputs into a Streamlit control tower for disruption prioritization and operational decision support.
