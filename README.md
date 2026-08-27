@@ -4,15 +4,14 @@
 
 An end-to-end supply-chain analytics and machine-learning project that turns store/SKU demand and supplier operations into **forecasts, replenishment decisions, risk signals, disruption alerts, and an interactive control tower**.
 
-> **Portfolio note:** the dataset is synthetic. The project is designed to demonstrate an end-to-end ML/analytics workflow and does not claim production deployment or real-world disruption ground truth.
+> **Portfolio note:** the dataset is synthetic. The project demonstrates an end-to-end ML/analytics workflow and does not claim production deployment or real-world disruption ground truth.
 
 ## What the system does
 
 ```text
 Retail Supply-Chain Data
           │
-          ├── SQL / EDA
-          │
+          ├── SQL Analytics
           ▼
      Store × SKU Demand
           │
@@ -221,10 +220,6 @@ streamlit run app.py
 ├── src/
 │   ├── generate_dataset.py
 │   ├── load_to_postgres.py
-│   ├── eda.py
-│   ├── time_series_analysis.py
-│   ├── statistical_forecasting.py
-│   ├── xgboost_forecasting.py
 │   ├── baseline_forecasting.py
 │   ├── sku_level_forecasting.py
 │   ├── inventory_optimization.py
@@ -349,7 +344,7 @@ These limitations are intentional and are documented rather than hidden.
 
 ## Technology
 
-**Python · Pandas · NumPy · Scikit-learn · XGBoost · Statsmodels · SHAP · Streamlit · PostgreSQL · SQL · Matplotlib · Seaborn**
+**Python · Pandas · NumPy · Scikit-learn · XGBoost · SHAP · Streamlit · PostgreSQL · SQL · Matplotlib · Seaborn**
 
 ## Resume-ready project description
 
