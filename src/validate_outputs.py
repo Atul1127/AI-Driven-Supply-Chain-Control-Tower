@@ -80,7 +80,7 @@ def main():
         if finance["inventory_turnover"] < 0 or finance["days_inventory_outstanding"] < 0:
             errors.append("Inventory turnover and DIO must be non-negative")
 
-        abc_classes = set(frames["abc_analysis"]["abc_class"].dropna().unique())
+        abc_classes = set(frames["abc_analysis.csv"]["abc_class"].dropna().unique())
         if not abc_classes.issubset({"A", "B", "C"}):
             errors.append("ABC analysis contains invalid classification values")
 
