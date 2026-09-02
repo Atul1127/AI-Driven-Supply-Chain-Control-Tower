@@ -1,34 +1,36 @@
 # AI-Driven Supply Chain Control Tower
 
+![Supply Chain Control Tower](images/banner.png)
+
 **SQL Analytics · Financial Analysis · Demand Forecasting · Inventory Optimization · Supplier Risk · Decision Intelligence**
 
-An end-to-end supply-chain analytics platform that converts store/SKU sales and supplier operations into **business KPIs, financial insights, forecasts, inventory decisions, risk signals, and an interactive control tower**.
+An end-to-end supply-chain analytics platform that turns retail sales and supplier operations into **business KPIs, financial insights, forecasts, inventory decisions, risk signals, and prioritized actions**.
 
-> **Portfolio note:** The dataset is synthetic. Financial outputs use explicit planning assumptions, and disruption detection is decision-support analysis rather than calibrated probability or proven real-world ground truth.
+> **Portfolio disclosure:** The dataset is synthetic. Financial outputs use explicit planning assumptions, and disruption detection is decision-support analysis rather than calibrated probability or proven real-world ground truth.
 
-## Why this project matters
+## 🎯 What I Built
 
-This project is designed to demonstrate the workflow expected in **Data Analyst, Business Analyst, Finance Analyst, and Data Science** roles:
+This project demonstrates a complete analytics-to-decision workflow relevant to **Data Analyst, Business Analyst, Finance Analyst, and Data Science** roles:
 
 ```text
-Raw Retail Data
-      ↓
+Retail & Supplier Data
+        ↓
 SQL Business Analysis
-      ↓
-Financial KPIs + Variance Analysis
-      ↓
+        ↓
+Financial KPIs & Variance Analysis
+        ↓
 Demand Forecasting
-      ↓
+        ↓
 Inventory Optimization
-      ↓
+        ↓
 Supplier & Disruption Risk
-      ↓
+        ↓
 Business Impact
-      ↓
-Streamlit Decision Dashboard
+        ↓
+Interactive Streamlit Control Tower
 ```
 
-## Key results
+## 📊 Key Results
 
 Results from the current reproducible pipeline run:
 
@@ -38,18 +40,36 @@ Results from the current reproducible pipeline run:
 | Daily records | **109,650** |
 | XGBoost MAE | **5.79** |
 | Seasonal-naive MAE | **8.93** |
-| MAE improvement | **35.1%** |
+| Forecast MAE improvement | **35.1%** |
 | Current stockout pairs | **44 / 150** |
 | Low-coverage pairs (<7 days) | **93 / 150** |
 | Historical lost-sales exposure | **₹6.21 Cr** |
 | Current inventory value | **₹29.4 Lakh** |
 | Recommended replenishment | **117,294 units** |
 
-The financial figures above are derived from the synthetic dataset and documented cost assumptions; they are not real company results.
+Financial values are derived from the synthetic dataset and documented assumptions; they are **not real company results**.
 
-## Core capabilities
+## 🖥️ Dashboard
 
-### 1. SQL business analytics
+The Streamlit dashboard provides an executive view of operational and financial decisions.
+
+![Dashboard Interface](images/Interface.png)
+
+### Dashboard views
+
+- 🚨 **Control Tower** — prioritized inventory actions and filters
+- 💰 **Financial Analytics** — revenue, COGS, gross margin, budget variance, DIO and holding cost
+- 📈 **Sales & Revenue** — promotion effectiveness and ABC product analysis
+- 📦 **Inventory** — stockouts, inventory value, coverage and replenishment signals
+- 🏭 **Supplier Risk** — supplier service performance and financial exposure
+- ⚠️ **Disruption** — anomaly and temporal disruption intelligence
+- 🔮 **Forecast** — 30-day SKU/store demand forecasts
+- 📊 **Model Benchmark** — baseline versus XGBoost performance
+- 🎯 **Recommendations** — prioritized business actions
+
+## 🧩 Core Analytics
+
+### 1. SQL Business Analytics
 
 PostgreSQL analysis demonstrates practical analyst SQL:
 
@@ -63,14 +83,14 @@ PostgreSQL analysis demonstrates practical analyst SQL:
 - Revenue, demand, stockout and lost-sales KPIs
 - Product, store and supplier performance
 
-See:
+Files:
 
 - `sql/01_business_analysis.sql`
 - `sql/02_finance_analysis.sql`
 
-### 2. Financial analysis
+### 2. Financial Analysis
 
-A dedicated finance layer connects operational data to commercial metrics:
+A dedicated finance layer connects operational performance to commercial metrics:
 
 - Revenue
 - COGS
@@ -85,13 +105,13 @@ A dedicated finance layer connects operational data to commercial metrics:
 - Historical lost-sales exposure
 - Promotion effectiveness
 - ABC product classification
-- Supplier-level lost-sales and stockout impact
+- Supplier-level stockout financial impact
 
 **Cost assumption:** unit cost is modeled as **60% of list price** because procurement cost is not available in the original synthetic dataset.
 
-**Budget assumption:** monthly budget is modeled from prior-month actual performance with explicit growth assumptions; it is not a historical company budget.
+**Budget assumption:** monthly budget is modeled from prior-month actual performance using explicit growth assumptions; it is not a historical company budget.
 
-### 3. Demand forecasting
+### 3. Demand Forecasting
 
 - Store × SKU daily demand aggregation
 - Leakage-safe lag and rolling features
@@ -105,7 +125,7 @@ A dedicated finance layer connects operational data to commercial metrics:
 
 Current run: XGBoost achieved **5.79 MAE** versus **8.93 MAE** for the seasonal-naive baseline across 150 SKU-store pairs.
 
-### 4. Inventory optimization
+### 4. Inventory Optimization
 
 Forecast demand is translated into operational decisions:
 
@@ -123,9 +143,9 @@ EOQ
 Recommended Replenishment
 ```
 
-The output identifies **CRITICAL, REORDER, and NORMAL** inventory states and supports prioritized replenishment decisions.
+The output identifies **CRITICAL, REORDER, and NORMAL** inventory states for prioritized replenishment.
 
-### 5. Supplier risk
+### 5. Supplier Risk
 
 Supplier performance combines:
 
@@ -137,7 +157,7 @@ Supplier performance combines:
 - Fill rate
 - Composite risk scoring
 
-### 6. Disruption intelligence
+### 6. Disruption Intelligence
 
 Supplier behavior is analyzed using:
 
@@ -150,7 +170,7 @@ Supplier behavior is analyzed using:
 
 The temporal layer compares operational behavior against a preceding **14-day baseline**. Disruption scores are intended for prioritization, not probability estimation.
 
-### 7. Business impact
+### 7. Business Impact
 
 Operational signals are translated into business consequences:
 
@@ -162,26 +182,11 @@ Operational signals are translated into business consequences:
 - Recommended replenishment
 - Critical and reorder SKU-store pairs
 
-## Streamlit dashboard
+## 🛠️ Tech Stack
 
-Run:
+**Python · Pandas · NumPy · PostgreSQL · SQL · Scikit-learn · XGBoost · SHAP · Streamlit · Matplotlib · Seaborn**
 
-```bash
-streamlit run app.py
-```
-
-Dashboard sections:
-
-1. **Control Tower** — prioritized actions and replenishment
-2. **Financial Analytics** — revenue, margin, budget variance, ABC and supplier financial impact
-3. **Sales & Revenue** — sales trends and revenue analysis
-4. **Inventory** — stockouts, coverage and inventory signals
-5. **Supplier Risk** — supplier performance and risk
-6. **Disruption** — anomaly and temporal disruption signals
-7. **Forecast** — demand forecasts and model comparison
-8. **Recommendations** — prioritized business actions
-
-## Repository structure
+## 📁 Repository Structure
 
 ```text
 .
@@ -189,6 +194,11 @@ Dashboard sections:
 ├── data/
 │   └── retail_sales_data.csv
 ├── images/
+│   ├── banner.png
+│   ├── Interface.png
+│   ├── business/
+│   ├── forecasting/
+│   └── time_series/
 ├── sql/
 │   ├── 01_business_analysis.sql
 │   └── 02_finance_analysis.sql
@@ -212,24 +222,24 @@ Dashboard sections:
 └── README.md
 ```
 
-Generated pipeline CSVs are ignored by Git; the source retail dataset is retained in `data/` by default.
+Generated pipeline CSVs are ignored by Git; the source retail dataset is retained in `data/`.
 
-## Run locally
+## 🚀 Quick Start
 
-### 1. Clone and enter the project
+### 1. Clone the repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Atul1127/AI-Driven-Supply-Chain-Control-Tower.git
 cd AI-Driven-Supply-Chain-Control-Tower
 ```
 
-### 2. Create the environment
+### 2. Create and activate a virtual environment
 
 ```bash
 python -m venv .venv
 ```
 
-Windows Git Bash:
+**Windows Git Bash:**
 
 ```bash
 source .venv/Scripts/activate
@@ -241,7 +251,7 @@ source .venv/Scripts/activate
 pip install -r requirements.txt
 ```
 
-### 4. Run the complete pipeline
+### 4. Run the complete analytics pipeline
 
 ```bash
 python src/run_pipeline.py
@@ -253,7 +263,9 @@ python src/run_pipeline.py
 streamlit run app.py
 ```
 
-## Reproducible pipeline
+The pipeline generates the analytical CSV outputs consumed by the dashboard. PostgreSQL is required for the database-loading/SQL workflow; the dashboard reads the generated CSV outputs.
+
+## 🔄 Reproducible Pipeline
 
 ```text
 1. baseline_forecasting.py
@@ -271,7 +283,7 @@ streamlit run app.py
 
 The final validation checks required artifacts, forecasting performance, 150-pair coverage, finance KPI consistency, ABC classifications, business-impact values, and disruption score ranges.
 
-## Data
+## 🗃️ Data
 
 The included dataset is synthetic retail supply-chain data representing:
 
@@ -283,18 +295,22 @@ The included dataset is synthetic retail supply-chain data representing:
 
 The data supports pricing, discounts, promotions, demand, sales, revenue, inventory, stockouts, supplier performance and replenishment analysis.
 
-## Evaluation and limitations
+## ⚠️ Evaluation & Limitations
 
-Forecasting is evaluated chronologically using MAE, RMSE and MAPE. Disruption detection is unsupervised because there is no verified historical disruption ground truth.
+- Forecasting is evaluated chronologically using MAE, RMSE and MAPE.
+- Disruption detection is unsupervised because there is no verified historical disruption ground truth.
+- Unit cost uses the documented **60%-of-list-price** assumption.
+- Budget values are modeled planning assumptions rather than historical company budgets.
+- Inventory formulas are simplified for portfolio demonstration.
+- Historical lost-sales exposure is simulated; it should not be presented as realized savings.
+- The project does not claim production deployment, streaming infrastructure, automated retraining, or real-world disruption prediction.
 
-Financial outputs are portfolio analysis. Unit cost uses the documented 60%-of-list-price assumption, while budget values use planning assumptions. Inventory formulas are simplified for demonstration.
+## 💼 Resume-Ready Description
 
-The project does not claim production deployment, streaming infrastructure, automated retraining, or real-world disruption prediction.
+> Built an end-to-end supply-chain analytics platform combining PostgreSQL SQL analysis, financial KPIs, variance analysis, XGBoost demand forecasting, inventory optimization, supplier risk, disruption intelligence, and an interactive Streamlit decision dashboard.
 
-## Technology
+## 📌 Project Focus
 
-**Python · Pandas · NumPy · PostgreSQL · SQL · Scikit-learn · XGBoost · SHAP · Streamlit · Matplotlib · Seaborn**
+**Primary roles:** Data Analyst · Business Analyst · Finance Analyst · Data Scientist
 
-## Resume-ready description
-
-> **AI-Driven Supply Chain Control Tower** — Built an end-to-end analytics platform combining PostgreSQL SQL analysis, financial KPIs, variance analysis, demand forecasting, inventory optimization, supplier risk, disruption intelligence, and an interactive Streamlit decision dashboard.
+The project intentionally emphasizes the full path from **data → KPI → analysis → forecast → financial impact → business decision**, rather than adding unnecessary model complexity.
