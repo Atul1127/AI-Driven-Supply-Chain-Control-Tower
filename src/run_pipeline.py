@@ -12,6 +12,7 @@ STEPS = [
     "src/disruption_detection.py",
     "src/create_control_tower.py",
     "src/business_impact.py",
+    "src/finance_analysis.py",
     "src/shap_explainability.py",
     "src/validate_outputs.py",
 ]
