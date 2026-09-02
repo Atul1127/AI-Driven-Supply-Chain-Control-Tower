@@ -64,7 +64,7 @@ PostgreSQL analysis covers the core skills expected from an analyst fresher:
 
 ### 2. Financial analysis
 
-The project now includes a dedicated finance layer using transparent assumptions because procurement cost is not present in the original synthetic dataset.
+The project includes a dedicated finance layer using transparent assumptions because procurement cost is not present in the original synthetic dataset.
 
 Core outputs:
 
@@ -116,14 +116,7 @@ Recommended Replenishment
 
 ### 5. Supplier risk
 
-Supplier profiles use operational measures including:
-
-- on-time delivery
-- lead time
-- defects
-- delays
-- ordered vs received quantity
-- fill rate
+Supplier profiles use operational measures including on-time delivery, lead time, defects, delays, ordered vs received quantity, and fill rate.
 
 ### 6. Unsupervised disruption intelligence
 
@@ -145,14 +138,16 @@ Run:
 streamlit run app.py
 ```
 
-Dashboard sections include:
+Current dashboard sections:
 
 1. **Control Tower** — priority actions and replenishment
-2. **Disruption Intelligence** — anomalies, temporal signals and explanations
-3. **SKU Forecast** — 30-day demand forecasts
-4. **Model Benchmark** — MAE / RMSE / MAPE comparison
+2. **Financial Analytics** — revenue, margin, budget variance, ABC and supplier financial impact
+3. **Sales & Revenue** — sales and revenue trends
+4. **Inventory** — stockouts, coverage and inventory signals
 5. **Supplier Risk** — supplier performance and risk
-6. **Business Impact** — stockouts, lost sales and inventory value
+6. **Disruption** — anomaly and temporal disruption signals
+7. **Forecast** — demand forecast and model results
+8. **Recommendations** — prioritized business actions
 
 ## Repository structure
 
@@ -163,7 +158,8 @@ Dashboard sections include:
 │   └── retail_sales_data.csv
 ├── images/
 ├── sql/
-│   └── 01_business_analysis.sql
+│   ├── 01_business_analysis.sql
+│   └── 02_finance_analysis.sql
 ├── src/
 │   ├── generate_dataset.py
 │   ├── load_to_postgres.py
@@ -192,7 +188,7 @@ Generated pipeline CSVs are ignored by Git; only the source retail dataset is re
 python src/run_pipeline.py
 ```
 
-The reproducible pipeline now executes finance analysis after the existing operational analytics:
+The reproducible pipeline executes:
 
 ```text
 1. baseline_forecasting.py
@@ -218,13 +214,13 @@ The included dataset is **synthetic retail supply-chain data** generated for the
 - 2023–2024 dates
 - 109,650 daily records
 
-Existing fields already support pricing, discounts, promotions, demand, sales, revenue, inventory, stockouts, supplier performance and replenishment analysis.
+Existing fields support pricing, discounts, promotions, demand, sales, revenue, inventory, stockouts, supplier performance and replenishment analysis.
 
 ## Evaluation and limitations
 
 Forecasting uses chronological MAE, RMSE and MAPE comparisons. Disruption detection is unsupervised/heuristic because there is no verified historical disruption ground truth.
 
-Financial outputs are also designed as portfolio analysis: unit cost is an explicit 60%-of-list-price assumption, and budget values are planning assumptions rather than historical company budgets.
+Financial outputs are portfolio analysis: unit cost is an explicit 60%-of-list-price assumption, and budget values are planning assumptions rather than historical company budgets.
 
 Other limitations include synthetic data, simplified inventory formulas, no streaming production architecture, no automated retraining, and human review of recommendations.
 
