@@ -305,12 +305,3 @@ The data supports pricing, discounts, promotions, demand, sales, revenue, invent
 - Historical lost-sales exposure is simulated; it should not be presented as realized savings.
 - The project does not claim production deployment, streaming infrastructure, automated retraining, or real-world disruption prediction.
 
-## 💼 Resume-Ready Description
-
-> Built an end-to-end supply-chain analytics platform combining PostgreSQL SQL analysis, financial KPIs, variance analysis, XGBoost demand forecasting, inventory optimization, supplier risk, disruption intelligence, and an interactive Streamlit decision dashboard.
-
-## 📌 Project Focus
-
-**Primary roles:** Data Analyst · Business Analyst · Finance Analyst · Data Scientist
-
-The project intentionally emphasizes the full path from **data → KPI → analysis → forecast → financial impact → business decision**, rather than adding unnecessary model complexity.
